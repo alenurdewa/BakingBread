@@ -1,0 +1,160 @@
+/* file: webapp/css/home.css */
+
+/* Stili Navbar */
+.navbar {
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    padding: 10px 20px;
+}
+
+.navbar-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.navbar-brand {
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.navbar-search {
+    flex-grow: 1;
+    max-width: 400px;
+}
+
+.navbar-search input {
+    border-radius: 20px; /* Ricerca arrotondata */
+    padding: 8px 16px;
+}
+
+.navbar-menu {
+    display: flex;
+    gap: 15px;
+}
+
+.nav-link {
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+.text-danger {
+    color: #dc2626;
+}
+
+/* Layout Feed Principale */
+.feed-container {
+    max-width: 600px; /* Centrato e ottimizzato per la lettura */
+    margin: 30px auto;
+    padding: 0 15px;
+}
+
+/* Card Ricetta */
+.post-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 25px;
+    overflow: hidden;
+}
+
+.post-header {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.post-avatar {
+    width: 40px;
+    height: 40px;
+    background-color: var(--border-color);
+    border-radius: 50%;
+    margin-right: 12px;
+}
+
+.post-author-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.post-date {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.post-body {
+    padding: 15px;
+}
+
+.post-title {
+    font-size: 18px;
+    margin: 0 0 10px 0;
+    color: var(--text-main);
+}
+
+.post-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.post-tags {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.tag {
+    background-color: #f3f4f6;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.post-footer {
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-around;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--border-radius-sm);
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+    background-color: #f3f4f6;
+}
+
+.action-btn.active {
+    color: var(--primary-color);
+}
+
+/* Media Query per Mobile */
+@media (max-width: 600px) {
+    .navbar-container { flex-direction: column; }
+    .navbar-search { width: 100%; max-width: none; }
+    .feed-container { margin-top: 15px; }
+}
