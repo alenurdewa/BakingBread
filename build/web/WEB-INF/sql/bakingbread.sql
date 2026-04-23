@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS utenti (
     aggiornato_il DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- TABELLA RICETTE
+-- TABELLA RICETTE (Ora include direttamente immagine_base64)
 CREATE TABLE IF NOT EXISTS ricette (
     id_ricetta INT AUTO_INCREMENT PRIMARY KEY,
     id_utente INT NOT NULL,
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS ricette (
     tempo_preparazione_min INT,
     dieta VARCHAR(50) DEFAULT 'none',
     porzioni INT DEFAULT 1,
+    immagine_base64 LONGTEXT, 
     pubblicata BOOLEAN DEFAULT TRUE,
     creato_il DATETIME DEFAULT CURRENT_TIMESTAMP,
     aggiornato_il DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -190,6 +191,20 @@ CREATE TABLE IF NOT EXISTS sessioni_utente (
     creato_il DATETIME DEFAULT CURRENT_TIMESTAMP,
     scade_il DATETIME,
     FOREIGN KEY (id_utente) REFERENCES utenti(id_utente) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+-- Per gestire l'immagine profilo come testo Base64
+ALTER TABLE utenti ADD COLUMN avatar_base64 LONGTEXT;
+
+-- Tabella semplificata e dedicata per i salvataggi delle ricette
+CREATE TABLE IF NOT EXISTS ricette_salvate (
+    id_utente INT NOT NULL,
+    id_ricetta INT NOT NULL,
+    salvato_il DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_utente, id_ricetta),
+    FOREIGN KEY (id_utente) REFERENCES utenti(id_utente) ON DELETE CASCADE,
+    FOREIGN KEY (id_ricetta) REFERENCES ricette(id_ricetta) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- INDICI UTILI

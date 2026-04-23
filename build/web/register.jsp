@@ -1,58 +1,11 @@
-<%@ page import="java.sql.*, java.security.MessageDigest, java.math.BigInteger" %>
+<%@ page import="java.sql.*, java.security.MessageDigest" %>
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%
-String message = "";
-boolean isSuccess = false;
-
-if(request.getMethod().equalsIgnoreCase("POST")) {
-    String username = request.getParameter("username");
-    String email = request.getParameter("email");
-    String password = request.getParameter("password");
-    String nome_visualizzato = request.getParameter("nome_visualizzato");
-
-    if(username == null || email == null || password == null || username.isEmpty() || email.isEmpty() || password.isEmpty()) {
-        message = "Compila tutti i campi obbligatori.";
-    } else {
-        String password_hash = "";
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(password.getBytes("UTF-8"));
-            password_hash = String.format("%064x", new BigInteger(1, md.digest()));
-        } catch(Exception e) {
-            message = "Errore hash: " + e.getMessage();
-        }
-
-        String USER = "root";
-        String PASSWORD = "";
-        String DSN = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC";
-
-        try (Connection conn = DriverManager.getConnection(DSN, USER, PASSWORD)) {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            String sql = "INSERT INTO utenti (username, email, password_hash, nome_visualizzato) VALUES (?, ?, ?, ?)";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, username);
-            ps.setString(2, email);
-            ps.setString(3, password_hash);
-            ps.setString(4, nome_visualizzato);
-            ps.executeUpdate();
-            
-            message = "Registrazione completata con successo.";
-            isSuccess = true;
-        } catch(SQLException sqle) {
-            if(sqle.getErrorCode() == 1062) { message = "Username o email già registrati."; } 
-            else { message = "Errore SQL: " + sqle.getMessage(); }
-        } catch(Exception e) {
-            message = "Errore: " + e.getMessage();
-        }
-    }
-}
-%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registrazione - BakingBread</title>
+    <title>Registrati - BakingBread</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/global.css">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/auth.css">
 </head>
@@ -60,46 +13,53 @@ if(request.getMethod().equalsIgnoreCase("POST")) {
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
-                <h2>Crea un Account</h2>
+                <h2>Crea Account</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin-top: 5px;">Unisciti alla community di BakingBread</p>
             </div>
+            
+            <%
+                String errorMsg = ""; String successMsg = "";
+                if ("POST".equalsIgnoreCase(request.getMethod())) {
+                    String username = request.getParameter("username");
+                    String email = request.getParameter("email");
+                    String password = request.getParameter("password");
+                    
+                    if (username != null && email != null && password != null && !username.isEmpty()) {
+                        try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bakingbread?useSSL=false", "root", "")) {
+                            Class.forName("com.mysql.cj.jdbc.Driver");
+                            MessageDigest md = MessageDigest.getInstance("SHA-256");
+                            byte[] hash = md.digest(password.getBytes("UTF-8"));
+                            StringBuilder hexString = new StringBuilder();
+                            for (byte b : hash) {
+                                String hex = Integer.toHexString(0xff & b);
+                                if(hex.length() == 1) hexString.append('0');
+                                hexString.append(hex);
+                            }
+                            
+                            String sql = "INSERT INTO utenti (username, email, password_hash, nome_visualizzato) VALUES (?, ?, ?, ?)";
+                            PreparedStatement ps = conn.prepareStatement(sql);
+                            ps.setString(1, username); ps.setString(2, email); ps.setString(3, hexString.toString()); ps.setString(4, username);
+                            
+                            if (ps.executeUpdate() > 0) {
+                                successMsg = "Registrazione completata! Ora puoi fare il <a href='login.jsp'>Login</a>.";
+                            }
+                        } catch (SQLIntegrityConstraintViolationException e) { errorMsg = "Username o Email già in uso.";
+                        } catch (Exception e) { errorMsg = "Errore: " + e.getMessage(); }
+                    }
+                }
+            %>
+            
+            <% if (!errorMsg.isEmpty()) { %><div class="alert alert-error"><%= errorMsg %></div><% } %>
+            <% if (!successMsg.isEmpty()) { %><div class="alert alert-success"><%= successMsg %></div><% } %>
 
-            <form method="post" action="register.jsp" id="registerForm">
-                <div class="form-group">
-                    <label for="username">Username*</label>
-                    <input type="text" id="username" name="username" placeholder="Scegli un username" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="email">Email*</label>
-                    <input type="email" id="email" name="email" placeholder="es. mario@email.com" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="nome_visualizzato">Nome Visualizzato</label>
-                    <input type="text" id="nome_visualizzato" name="nome_visualizzato" placeholder="Come vuoi farti chiamare?">
-                </div>
-
-                <div class="form-group">
-                    <label for="password">Password*</label>
-                    <input type="password" id="password" name="password" placeholder="Minimo 6 caratteri" required>
-                    <button type="button" class="password-toggle" id="togglePassword">Mostra</button>
-                </div>
-
-                <button type="submit" class="btn-primary">Registrati</button>
+            <form method="POST" action="register.jsp">
+                <div class="form-group"><label>Username</label><input type="text" name="username" required></div>
+                <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+                <div class="form-group"><label>Password</label><input type="password" name="password" required></div>
+                <button type="submit" class="btn-primary mt-3">Registrati</button>
             </form>
-
-            <% if(!message.isEmpty()) { %>
-                <div class="alert <%= isSuccess ? "alert-success" : "alert-error" %>">
-                    <%= message %>
-                </div>
-            <% } %>
-
-            <div class="text-center mt-3">
-                <p style="font-size: 14px; color: var(--text-muted);">Hai già un account? <a href="login.jsp">Accedi qui</a></p>
-            </div>
+            <p class="text-center mt-3" style="font-size: 14px;">Hai già un account? <a href="login.jsp">Accedi</a></p>
         </div>
     </div>
-    
-    <script src="${pageContext.request.contextPath}/js/register.js"></script>
 </body>
 </html>

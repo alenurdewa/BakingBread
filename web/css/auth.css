@@ -4,42 +4,84 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    padding: 20px; /* Margine di sicurezza per i cellulari */
+    padding: 20px;
+    background: radial-gradient(circle at top left, rgba(255,90,31,0.05), transparent 40%),
+                radial-gradient(circle at bottom right, rgba(255,90,31,0.05), transparent 40%);
 }
 
 .auth-card {
     background-color: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md);
+    border-radius: var(--border-radius-lg);
     padding: 40px;
     width: 100%;
-    max-width: 400px; /* Su desktop si ferma a 400px, su mobile prende il 100% */
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    max-width: 420px;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    animation: fadeSlideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-.auth-header { text-align: center; margin-bottom: 30px; }
-.auth-header h2 { margin: 0; font-size: 24px; color: var(--primary-color); }
+.auth-header { 
+    text-align: center; 
+    margin-bottom: 35px; 
+}
 
-.form-group { margin-bottom: 20px; position: relative; }
-.form-group label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.auth-header h2 { 
+    margin: 0; 
+    font-size: 28px; 
+    font-weight: 800;
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.form-group { 
+    margin-bottom: 24px; 
+    position: relative; 
+}
+
+.form-group label { 
+    display: block; 
+    margin-bottom: 8px; 
+    font-size: 14px; 
+    font-weight: 600; 
+    color: var(--text-main); 
+    transition: color var(--transition-fast);
+}
+
+.form-group:focus-within label {
+    color: var(--primary-color);
+}
 
 .alert {
-    margin-top: 15px; padding: 10px; border-radius: var(--border-radius-sm); font-size: 14px; text-align: center;
+    margin-bottom: 25px; 
+    padding: 15px; 
+    border-radius: var(--border-radius-sm); 
+    font-size: 14px; 
+    text-align: center;
+    font-weight: 500;
+    animation: fadeSlideUp 0.4s ease-out;
 }
-.alert-error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
-.alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
-/* Stile per il tasto testuale Mostra/Nascondi password */
+.alert-error { background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.alert-success { background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
 .password-toggle {
     position: absolute;
     right: 12px;
-    top: 36px;
-    background: none;
+    top: 38px;
+    background: var(--bg-color);
     border: none;
     cursor: pointer;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-muted);
-    padding: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all var(--transition-fast);
 }
-.password-toggle:hover { color: var(--primary-color); }
+
+.password-toggle:hover { 
+    color: var(--primary-color); 
+    background-color: rgba(255, 90, 31, 0.1);
+}
