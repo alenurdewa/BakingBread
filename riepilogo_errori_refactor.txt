@@ -1,0 +1,48 @@
+RIEPILOGO ERRORI DI COMPILAZIONE JSP E SOLUZIONI
+
+Il presente documento riassume i problemi riscontrati nei file JSP del progetto e fornisce le correzioni puntuali per garantire un funzionamento impeccabile.
+
+-------------------------------------------------------------------------------
+1. FILE: login.jsp
+-------------------------------------------------------------------------------
+ERRORE: "The type Date is ambiguous" (Riga 134)
+CAUSA: Conflitto tra java.util.Date e java.sql.Date dovuto a import multipli (.*).
+SOLUZIONE: Utilizzare il nome completo della classe (Fully Qualified Name).
+
+CODICE CORRETTO:
+java.util.Date scadenza = cal.getTime();
+
+-------------------------------------------------------------------------------
+2. FILE: home.jsp
+-------------------------------------------------------------------------------
+ERRORE: "Type mismatch: cannot convert from Timestamp to Date" (Riga 124)
+CAUSA: rs.getTimestamp() restituisce un oggetto java.sql.Timestamp che non viene 
+       convertito automaticamente in java.util.Date nel contesto del JSP.
+SOLUZIONE: Effettuare la conversione esplicita.
+
+CODICE CORRETTO:
+java.util.Date creato = new java.util.Date(rs.getTimestamp("creato_il").getTime());
+
+NOTA AGGIUNTIVA: Rimuovere lo spazio nel nome colonna alla riga 123 
+(da " immagine_url" a "immagine_url").
+
+-------------------------------------------------------------------------------
+3. FILE: logout.jsp
+-------------------------------------------------------------------------------
+ERRORE: "DriverManager cannot be resolved" / "PreparedStatement cannot be resolved"
+CAUSA: Mancano le direttive di importazione per il pacchetto java.sql.
+SOLUZIONE: Aggiungere l'import in cima al file.
+
+CODICE CORRETTO:
+<%@ page import="java.sql.*" %>
+
+-------------------------------------------------------------------------------
+REGOLE GENERALI PER IL REFACTORING (PER IL CODING AGENT)
+-------------------------------------------------------------------------------
+- GESTIONE DATE: Usare sempre java.util.Date per la logica applicativa e 
+  java.sql.Timestamp per l'inserimento/lettura da DB.
+- CHIUSURA RISORSE: Assicurarsi che ogni Connection, PreparedStatement e ResultSet 
+  venga chiuso nel blocco finally o tramite try-with-resources.
+- SICUREZZA: Evitare di stampare parametri direttamente da request.getParameter 
+  negli attributi 'value' dell'HTML per prevenire XSS.
+- ASSET: Sostituire ogni emoji con file .svg situati nella cartella /media.

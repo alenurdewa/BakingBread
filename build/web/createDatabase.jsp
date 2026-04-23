@@ -9,7 +9,7 @@
 String USER = "root";
 String PASSWORD = "";
 String DSN = "jdbc:mysql://localhost:3306/?useSSL=false&serverTimezone=UTC";
-String sqlFile = application.getRealPath("/WEB-INF/sql/bakingbread.sql");
+String sqlFile = application.getRealPath("/WEB-INF/sql/schema.sql");
 
 Connection conn = null;
 Statement stmt = null;
