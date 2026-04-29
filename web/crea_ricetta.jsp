@@ -11,7 +11,7 @@
         return;
     }
     
-    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false";
+    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC";
     String errorMsg = "";
     String successMsg = "";
     
@@ -119,8 +119,7 @@
                             String quantita = quantitaArr != null && quantitaArr.length > i ? quantitaArr[i] : "";
                             String unita = unitaArr != null && unitaArr.length > i ? unitaArr[i] : "";
                             
-                            ps = conn.prepareStatement(
-                                "SELECT id_ingrediente FROM Ingrediente WHERE nome = ?");
+                            ps = conn.prepareStatement("SELECT id_ingrediente FROM Ingrediente WHERE nome = ?");
                             ps.setString(1, nomeIng.trim());
                             ResultSet rs = ps.executeQuery();
                             int idIng = 0;
@@ -213,7 +212,7 @@
                 ricettaModifica.put("porzioni", rs.getInt("porzioni"));
                 ricettaModifica.put("difficolta", rs.getString("difficolta"));
                 ricettaModifica.put("dieta", rs.getString("dieta"));
-                ricettaModifica.put(" immagine_url", rs.getString(" immagine_url"));
+                ricettaModifica.put("immagine_url", rs.getString("immagine_url"));
                 ricettaModifica.put("pubblicata", rs.getBoolean("pubblicata"));
             }
             rs.close();
@@ -288,7 +287,7 @@
                 </div>
             <% } %>
             
-            <form method="POST" action="crea_ricetta.jsp<%= isModifica ? "?modifica=" + idRicettaModifica : "" %>" accept-charset="UTF-8">
+            <form method="POST" action="crea_ricetta.jsp<%= isModifica ? "?modifica=" + idRicettaModifica : "" %>">
                 <div class="form-group mt-4">
                     <label for="titolo">Titolo *</label>
                     <input type="text" id="titolo" name="titolo" required maxlength="200"
@@ -299,7 +298,7 @@
                 <div class="form-group">
                     <label for="descrizione">Descrizione</label>
                     <textarea id="descrizione" name="descrizione" rows="3"
-                            placeholder="Descrivi la tua ricetta..."><%= ricettaModifica != null ? ricettaModifica.get("descrizione") : "" %></textarea>
+                              placeholder="Descrivi la tua ricetta..."><%= ricettaModifica != null ? ricettaModifica.get("descrizione") : "" %></textarea>
                 </div>
                 
                 <div class="form-group">
@@ -365,9 +364,9 @@
                 </div>
                 
                 <div class="form-group mt-3">
-                    <label for=" immagine_url">URL Immagine</label>
-                    <input type="url" id=" immagine_url" name=" immagine_url" 
-                           value="<%= ricettaModifica != null ? ricettaModifica.get(" immagine_url") : "" %>"
+                    <label for="immagine_url">URL Immagine</label>
+                    <input type="url" id="immagine_url" name="immagine_url" 
+                           value="<%= ricettaModifica != null ? ricettaModifica.get("immagine_url") : "" %>"
                            placeholder="https://...">
                     <small class="text-muted">Inserisci l'URL di un'immagine per la ricetta</small>
                 </div>

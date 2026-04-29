@@ -57,11 +57,14 @@
                         <% } %>
                     </a>
                 </li>
-                <li class="dropdown">
-                    <a href="#" class="d-flex align-items-center gap-2" onclick="toggleDropdown(event)">
-                        <div class="post-avatar avatar-sm" style="width:36px;height:36px;font-size:14px;">
+                <li class="dropdown" style="display:flex;align-items:center;gap:4px;">
+                    <a href="profile.jsp?id=<%= idUtenteLoggato %>" class="d-flex align-items-center" style="text-decoration:none;">
+                        <div class="post-avatar avatar-sm" style="width:36px;height:36px;font-size:14px;cursor:pointer;">
                             <%= usernameLoggato != null ? usernameLoggato.substring(0,1).toUpperCase() : "U" %>
                         </div>
+                    </a>
+                    <a href="#" onclick="toggleDropdown(event)" style="padding:4px;display:flex;align-items:center;text-decoration:none;color:var(--text-main);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
                     </a>
                     <div class="dropdown-menu">
                         <a href="profile.jsp?id=<%= idUtenteLoggato %>" class="dropdown-item">

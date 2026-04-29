@@ -131,17 +131,17 @@
     <div class="auth-wrapper">
         <div class="auth-card animate-entrance">
             <div class="auth-header">
-                <a href="home.jsp" class="navbar-brand" style="justify-content:center;margin-bottom:20px; display:flex;">
+                <a href="home.jsp" class="navbar-brand" style="justify-content:center;margin-bottom:20px;display:flex;">
                     <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
                         <path d="M16 2C14 2 12.5 3.5 12 5C11.5 4 10 2 7 2C5 2 3 4 3 6C3 9 6 12 9 14C7 15 6 17 6 19C6 22 8 24 11 24C13 24 15 23 16 21C17 23 19 24 21 24C24 24 26 22 26 19C26 17 25 15 23 14C26 12 29 9 29 6C29 4 27 2 25 2C22 2 20.5 3.5 20 5C19.5 3.5 18 2 16 2Z" fill="#ff5a1f"/>
                     </svg>
                 </a>
-                <h2 style="text-align:center;">Crea Account</h2>
-                <p class="text-muted" style="text-align:center;">Unisciti alla community di BakingBread</p>
+                <h2>Crea Account</h2>
+                <p class="text-muted">Unisciti alla community di BakingBread</p>
             </div>
             
             <% if (!errorMsg.isEmpty()) { %>
-                <div class="alert alert-error animate-entrance" style="background:#fee2e2; color:#dc2626; padding:10px; border-radius:8px; margin-bottom:15px; display:flex; align-items:center;">
+                <div class="alert alert-error">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;flex-shrink:0;">
                         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                     </svg>
@@ -150,7 +150,7 @@
             <% } %>
             
             <% if (!successMsg.isEmpty()) { %>
-                <div class="alert alert-success animate-entrance" style="background:#dcfce7; color:#16a34a; padding:10px; border-radius:8px; margin-bottom:15px; display:flex; align-items:center;">
+                <div class="alert alert-success">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;flex-shrink:0;">
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                     </svg>
@@ -179,7 +179,7 @@
                     <div style="position:relative;">
                         <input type="password" id="password" name="password" required 
                                autocomplete="new-password" minlength="8">
-                        <button type="button" class="password-toggle" onclick="togglePassword('password')" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer;">
+                        <button type="button" class="password-toggle" onclick="togglePassword('password')">
                             <svg id="eyeIcon1" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                             </svg>
@@ -193,7 +193,7 @@
                     <div style="position:relative;">
                         <input type="password" id="conferma_password" name="conferma_password" required 
                                autocomplete="new-password" minlength="8">
-                        <button type="button" class="password-toggle" onclick="togglePassword('conferma_password')" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer;">
+                        <button type="button" class="password-toggle" onclick="togglePassword('conferma_password')">
                             <svg id="eyeIcon2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                             </svg>
@@ -201,7 +201,7 @@
                     </div>
                 </div>
                 
-                <button type="submit" class="btn-primary mt-3" style="width:100%; padding:12px; background:#ff5a1f; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; display:flex; justify-content:center; align-items:center;">
+                <button type="submit" class="btn-primary" style="width:100%;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
                     </svg>
@@ -209,8 +209,8 @@
                 </button>
             </form>
             
-            <p class="text-center mt-4 text-muted" style="font-size:14px; text-align:center; margin-top:20px;">
-                Hai già un account? <a href="login.jsp" style="color:#ff5a1f; font-weight:bold; text-decoration:none;">Accedi</a>
+            <p class="text-center mt-4 text-muted" style="font-size:14px;">
+                Hai già un account? <a href="login.jsp">Accedi</a>
             </p>
         </div>
     </div>

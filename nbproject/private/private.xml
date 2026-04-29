@@ -2,30 +2,6 @@
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
-        <group>
-            <file>file:/W:/BakingBread/web/login.jsp</file>
-            <file>file:/W:/BakingBread/web/css/recipe.css</file>
-            <file>file:/W:/BakingBread/web/META-INF/context.xml</file>
-            <file>file:/W:/BakingBread/web/js/login.js</file>
-            <file>file:/W:/BakingBread/web/home.jsp</file>
-            <file>file:/W:/BakingBread/web/js/register.js.js</file>
-            <file>file:/W:/BakingBread/web/createDatabase.jsp</file>
-            <file>file:/W:/BakingBread/web/css/profile.css</file>
-            <file>file:/W:/BakingBread/web/crea_ricetta.jsp</file>
-            <file>file:/W:/BakingBread/web/network.jsp</file>
-            <file>file:/W:/BakingBread/web/register.jsp</file>
-            <file>file:/W:/BakingBread/web/dettaglio_ricetta.jsp</file>
-            <file>file:/W:/BakingBread/web/profile.jsp</file>
-            <file>file:/W:/BakingBread/web/js/main.js</file>
-            <file>file:/W:/BakingBread/web/logout.jsp</file>
-            <file>file:/W:/BakingBread/web/css/home.css</file>
-            <file>file:/W:/BakingBread/src/conf/MANIFEST.MF</file>
-            <file>file:/W:/BakingBread/web/navbar.jsp</file>
-            <file>file:/W:/BakingBread/web/WEB-INF/sql/bakingbread.sql</file>
-            <file>file:/W:/BakingBread/web/js/profile.js</file>
-            <file>file:/W:/BakingBread/web/css/global.css</file>
-            <file>file:/W:/BakingBread/web/js/home.js</file>
-            <file>file:/W:/BakingBread/web/css/auth.css</file>
-        </group>
+        <group/>
     </open-files>
 </project-private>

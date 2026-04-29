@@ -119,86 +119,84 @@
     <jsp:include page="navbar.jsp" />
     
     <main class="container mt-4">
-        <div class="post-card animate-entrance">
-            <div class="profile-header">
-                <div class="profile-avatar">
-                    <% if (avatarUrl != null && !avatarUrl.isEmpty()) { %>
-                        <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>" class="avatar avatar-lg">
-                    <% } else { %>
-                        <div class="avatar avatar-lg" style="background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-size:72px;">
-                            <%= nomeVisualizzato.substring(0,1).toUpperCase() %>
-                        </div>
+        <div class="profile-header animate-entrance">
+            <div class="profile-avatar">
+                <% if (avatarUrl != null && !avatarUrl.isEmpty()) { %>
+                    <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>">
+                <% } else { %>
+                    <div class="avatar">
+                        <%= nomeVisualizzato.substring(0,1).toUpperCase() %>
+                    </div>
+                <% } %>
+            </div>
+            
+            <div class="profile-info">
+                <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+                    <h2><%= nomeVisualizzato %></h2>
+                    <% if (!isProprioProfilo && idUtenteLoggato != null) { %>
+                        <% if (isSeguito) { %>
+                            <form method="POST" action="profile.jsp?id=<%= idProfilo %>" style="display:inline;">
+                                <input type="hidden" name="azione" value="non_seguire">
+                                <button type="submit" class="btn-secondary">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
+                                    </svg>
+                                    Non seguire
+                                </button>
+                            </form>
+                        <% } else { %>
+                            <form method="POST" action="profile.jsp?id=<%= idProfilo %>" style="display:inline;">
+                                <input type="hidden" name="azione" value="segui">
+                                <button type="submit" class="btn-primary">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
+                                    </svg>
+                                    Segui
+                                </button>
+                            </form>
+                        <% } %>
+                    <% } %>
+                    <% if (isProprioProfilo) { %>
+                        <a href="impostazioni.jsp" class="btn-outline">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Modifica Profilo
+                        </a>
                     <% } %>
                 </div>
                 
-                <div class="profile-info">
-                    <div class="d-flex align-items-center gap-3" style="flex-wrap:wrap;">
-                        <h2><%= nomeVisualizzato %></h2>
-                        <% if (!isProprioProfilo && idUtenteLoggato != null) { %>
-                            <% if (isSeguito) { %>
-                                <form method="POST" action="profile.jsp?id=<%= idProfilo %>">
-                                    <input type="hidden" name="azione" value="non_seguire">
-                                    <button type="submit" class="btn-secondary">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                                        </svg>
-                                        Non seguire piu'
-                                    </button>
-                                </form>
-                            <% } else { %>
-                                <form method="POST" action="profile.jsp?id=<%= idProfilo %>">
-                                    <input type="hidden" name="azione" value="segui">
-                                    <button type="submit" class="btn-primary">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                                        </svg>
-                                        Segui
-                                    </button>
-                                </form>
-                            <% } %>
-                        <% } %>
-                        <% if (isProprioProfilo) { %>
-                            <a href="impostazioni.jsp" class="btn-outline">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                </svg>
-                                Modifica Profilo
-                            </a>
-                        <% } %>
-                    </div>
-                    
-                    <p class="text-muted">@<%= username %></p>
-                    
-                    <% if (bio != null && !bio.isEmpty()) { %>
-                        <p class="mt-2"><%= bio %></p>
-                    <% } %>
-                    
-                    <div class="profile-stats mt-3">
-                        <div class="stat-item">
-                            <strong><%= numRicette %></strong>
-                            <span>Ricette</span>
-                        </div>
-                        <div class="stat-item">
-                            <strong><%= numFollower %></strong>
-                            <span>Follower</span>
-                        </div>
-                        <div class="stat-item">
-                            <strong><%= numSeguiti %></strong>
-                            <span>Seguiti</span>
-                        </div>
-                    </div>
-                    
-                    <% if (creatoIl != null) { %>
-                        <small class="text-muted mt-2" style="display:block;">Membro dal <%= creatoIl.toString().substring(0, 10) %></small>
-                    <% } %>
+                <p class="username">@<%= username %></p>
+                
+                <% if (bio != null && !bio.isEmpty()) { %>
+                    <p class="bio"><%= bio %></p>
+                <% } %>
+                
+                <div class="profile-stats">
+                    <a href="network.jsp?id=<%= idProfilo %>&tab=ricette" class="stat-item">
+                        <strong><%= numRicette %></strong>
+                        <span>Ricette</span>
+                    </a>
+                    <a href="network.jsp?id=<%= idProfilo %>&tab=follower" class="stat-item">
+                        <strong><%= numFollower %></strong>
+                        <span>Follower</span>
+                    </a>
+                    <a href="network.jsp?id=<%= idProfilo %>&tab=seguiti" class="stat-item">
+                        <strong><%= numSeguiti %></strong>
+                        <span>Seguiti</span>
+                    </a>
                 </div>
+                
+                <% if (creatoIl != null) { %>
+                    <small class="text-muted" style="display:block;margin-top:15px;">Membro dal <%= creatoIl.toString().substring(0, 10) %></small>
+                <% } %>
             </div>
         </div>
         
         <div class="mt-4">
             <h3>Ricette di <%= nomeVisualizzato %></h3>
             
-            <div class="recipe-grid mt-3">
+            <div class="recipe-grid">
                 <% 
                     try {
                         Connection conn = DriverManager.getConnection(dbUrl, "root", "");
@@ -208,7 +206,9 @@
                             "ORDER BY creato_il DESC LIMIT 20");
                         ps.setInt(1, idProfilo);
                         ResultSet rs = ps.executeQuery();
+                        boolean hasRecipes = false;
                         while (rs.next()) {
+                            hasRecipes = true;
                             int idR = rs.getInt("id_ricetta");
                             String titoloR = rs.getString("titolo");
                             String imgUrl = rs.getString(" immagine_url");
@@ -224,6 +224,11 @@
                         rs.close();
                         ps.close();
                         conn.close();
+                        if (!hasRecipes) {
+                %>
+                    <p class="text-muted">Nessuna ricetta pubblicata.</p>
+                <%
+                        }
                     } catch (Exception e) {}
                 %>
             </div>

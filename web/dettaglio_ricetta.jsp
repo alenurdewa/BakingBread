@@ -99,26 +99,31 @@
         Class.forName("com.mysql.cj.jdbc.Driver");
         Connection conn = DriverManager.getConnection(dbUrl, "root", "");
         
-        PreparedStatement ps = conn.prepareStatement(
+        StringBuilder sql = new StringBuilder(
             "SELECT r.*, u.id_utente AS uid, u.username, u.nome_visualizzato, u.avatar_url, " +
-            "(SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_like, " +
-            "(SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_salvata, " +
             "(SELECT COUNT(*) FROM Valutazione WHERE id_ricetta = r.id_ricetta) AS num_valutazioni, " +
-            "(SELECT AVG(stelle) FROM Valutazione WHERE id_ricetta = r.id_ricetta) AS media_voti, " +
-            "(SELECT stelle FROM Valutazione WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS mio_voto " +
-            "FROM Ricetta r JOIN Utente u ON r.id_utente = u.id_utente " +
-            "WHERE r.id_ricetta = ?");
+            "(SELECT AVG(stelle) FROM Valutazione WHERE id_ricetta = r.id_ricetta) AS media_voti ");
         
         if (idUtenteLoggato != null) {
-            ps.setInt(1, idUtenteLoggato);
-            ps.setInt(2, idUtenteLoggato);
-            ps.setInt(3, idUtenteLoggato);
+            sql.append(", (SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_like ");
+            sql.append(", (SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_salvata ");
+            sql.append(", (SELECT stelle FROM Valutazione WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS mio_voto ");
         } else {
-            ps.setInt(1, 0);
-            ps.setInt(2, 0);
-            ps.setInt(3, 0);
+            sql.append(", 0 AS gia_like, 0 AS gia_salvata, 0 AS mio_voto ");
         }
-        ps.setInt(idUtenteLoggato != null ? 4 : 3, idRicetta);
+        
+        sql.append("FROM Ricetta r JOIN Utente u ON r.id_utente = u.id_utente ");
+        sql.append("WHERE r.id_ricetta = ?");
+        
+        PreparedStatement ps = conn.prepareStatement(sql.toString());
+        
+        int paramIndex = 1;
+        if (idUtenteLoggato != null) {
+            ps.setInt(paramIndex++, idUtenteLoggato);
+            ps.setInt(paramIndex++, idUtenteLoggato);
+            ps.setInt(paramIndex++, idUtenteLoggato);
+        }
+        ps.setInt(paramIndex++, idRicetta);
         
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
@@ -129,7 +134,7 @@
             tempoCottura = rs.getInt("tempo_cottura_min");
             porzioni = rs.getInt("porzioni");
             difficolta = rs.getString("difficolta");
-            immagineUrl = rs.getString(" immagine_url");
+            immagineUrl = rs.getString("immagine_url");
             creatoIl = rs.getTimestamp("creato_il");
             idAutore = rs.getInt("uid");
             usernameAutore = rs.getString("username");
@@ -148,13 +153,19 @@
         rs.close();
         ps.close();
         
-        rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = " + idRicetta);
+        PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = ?");
+        ps2.setInt(1, idRicetta);
+        rs = ps2.executeQuery();
         if (rs.next()) numLike = rs.getInt(1);
         rs.close();
+        ps2.close();
         
-        rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM Commento WHERE id_ricetta = " + idRicetta);
+        ps2 = conn.prepareStatement("SELECT COUNT(*) FROM Commento WHERE id_ricetta = ?");
+        ps2.setInt(1, idRicetta);
+        rs = ps2.executeQuery();
         if (rs.next()) numCommenti = rs.getInt(1);
         rs.close();
+        ps2.close();
         
         conn.close();
     } catch (Exception e) {
@@ -184,14 +195,14 @@
             <div class="post-header">
                 <a href="profile.jsp?id=<%= idAutore %>" class="post-avatar" style="text-decoration:none;">
                     <% if (avatarAutore != null && !avatarAutore.isEmpty()) { %>
-                        <img src="<%= avatarAutore %>" alt="<%= nomeAutore %>" class="avatar-sm" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
-                    <% } else { %>
+                        <img src="<%= avatarAutore %>" alt="<%= nomeAutore != null ? nomeAutore : "" %>" class="avatar-sm" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                    <% } else if (nomeAutore != null && !nomeAutore.isEmpty()) { %>
                         <%= nomeAutore.substring(0,1).toUpperCase() %>
                     <% } %>
                 </a>
                 <div>
-                    <a href="profile.jsp?id=<%= idAutore %>" class="post-author-name"><%= nomeAutore %></a>
-                    <small class="text-muted" style="display:block;"><%= usernameAutore %></small>
+                    <a href="profile.jsp?id=<%= idAutore %>" class="post-author-name"><%= nomeAutore != null ? nomeAutore : "" %></a>
+                    <small class="text-muted" style="display:block;"><%= usernameAutore != null ? usernameAutore : "" %></small>
                 </div>
                 <% if (categoria != null && !categoria.isEmpty()) { %>
                     <span class="badge badge-secondary"><%= categoria %></span>
@@ -199,14 +210,14 @@
             </div>
             
             <% if (idRicetta > 0) { %>
-                <div class="recipe-image" style="background:<%= immagineUrl != null && ! immagineUrl.isEmpty() ? "url(" + immagineUrl + ")" : "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)" %>;background-size:cover;background-position:center;"></div>
+                <div class="recipe-image" style="background:<%= immagineUrl != null && !immagineUrl.isEmpty() ? "url(" + immagineUrl + ")" : "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)" %>;background-size:cover;background-position:center;"></div>
             <% } else { %>
                 <div class="recipe-image" style="background:linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);"></div>
             <% } %>
             
             <div class="post-body">
                 <div class="d-flex align-items-center justify-content-between">
-                    <h1><%= titolo %></h1>
+                    <h1><%= titolo != null ? titolo : "" %></h1>
                     <% if (idUtenteLoggato != null) { %>
                         <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="display:inline;">
                             <input type="hidden" name="azione" value="salva">
@@ -245,12 +256,14 @@
                             <span><strong>Porzioni:</strong> <%= porzioni %></span>
                         </div>
                     <% } %>
-                    <% if (difficolta != null && !difficolta.isEmpty()) { %>
+                    <% if (difficolta != null && !difficolta.isEmpty()) { 
+                        String difficoltaDisplay = difficolta.substring(0,1).toUpperCase() + difficolta.substring(1);
+                    %>
                         <div class="meta-item">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                             </svg>
-                            <span><strong>Difficolta:</strong> <%= difficolta.substring(0,1).toUpperCase() + difficolta.substring(1) %></span>
+                            <span><strong>Difficolta:</strong> <%= difficoltaDisplay %></span>
                         </div>
                     <% } %>
                 </div>
@@ -312,7 +325,7 @@
                 <%      hasPassaggi = true; }
                         int ordine = rs.getInt("ordine");
                         String descr = rs.getString("descrizione");
-                        String imgUrl = rs.getString(" immagine_url");
+                        String imgUrl = rs.getString("immagine_url");
                 %>
                         <li>
                             <span class="passaggio-numero"><%= ordine %></span>
@@ -412,14 +425,14 @@
                 <div class="commento-header d-flex align-items-center gap-2">
                     <a href="profile.jsp?id=<%= idCommentatore %>" class="post-avatar avatar-sm">
                         <% if (avatarCommentatore != null && !avatarCommentatore.isEmpty()) { %>
-                            <img src="<%= avatarCommentatore %>" alt="<%= nomeCommentatore %>" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
-                        <% } else { %>
+                            <img src="<%= avatarCommentatore %>" alt="<%= nomeCommentatore != null ? nomeCommentatore : "" %>" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                        <% } else if (nomeCommentatore != null && !nomeCommentatore.isEmpty()) { %>
                             <%= nomeCommentatore.substring(0,1).toUpperCase() %>
                         <% } %>
                     </a>
                     <div>
-                        <a href="profile.jsp?id=<%= idCommentatore %>" class="text-primary" style="font-weight:600;"><%= nomeCommentatore %></a>
-                        <small class="text-muted" style="display:block;"><%= usernameCommentatore %></small>
+                        <a href="profile.jsp?id=<%= idCommentatore %>" class="text-primary" style="font-weight:600;"><%= nomeCommentatore != null ? nomeCommentatore : "" %></a>
+                        <small class="text-muted" style="display:block;"><%= usernameCommentatore != null ? usernameCommentatore : "" %></small>
                     </div>
                     <% if (idUtenteLoggato != null && (idCommentatore == idUtenteLoggato || isAutore)) { %>
                         <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="margin-left:auto;">
@@ -433,8 +446,8 @@
                         </form>
                     <% } %>
                 </div>
-                <p class="mt-2" style="margin-left:52px;"><%= testo %></p>
-                <small class="text-muted" style="margin-left:52px;display:block;"><%= creato %></small>
+                <p class="mt-2" style="margin-left:52px;"><%= testo != null ? testo : "" %></p>
+                <small class="text-muted" style="margin-left:52px;display:block;"><%= creato != null ? creato : "" %></small>
             </div>
             <%     }
                 rs.close();

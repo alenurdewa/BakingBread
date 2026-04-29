@@ -142,46 +142,45 @@ String immagineUrl = rs.getString("immagine_url");
                              displayImmagine = "url(" + immagineUrl + ")";
                          }
             %>
-            <article class="post-card animate-entrance">
-                <div class="post-header">
-                    <a href="profile.jsp?id=<%= idAutore %>" class="post-avatar" style="text-decoration:none;">
+            <article class="recipe-card animate-entrance">
+                <div class="recipe-card-header">
+                    <a href="profile.jsp?id=<%= idAutore %>" class="recipe-card-avatar">
                         <% if (avatarUrl != null && !avatarUrl.isEmpty()) { %>
-                            <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>" class="avatar-sm" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                            <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>">
                         <% } else { %>
                             <%= nomeVisualizzato.substring(0,1).toUpperCase() %>
                         <% } %>
                     </a>
-                    <div>
-                        <a href="profile.jsp?id=<%= idAutore %>" class="post-author-name"><%= nomeVisualizzato %></a>
-                        <small class="text-muted" style="display:block;"><%= username %></small>
+                    <div class="recipe-card-author">
+                        <a href="profile.jsp?id=<%= idAutore %>"><%= nomeVisualizzato %></a>
+                        <small><%= username %></small>
                     </div>
                     <% if (categoria != null) { %>
                         <span class="badge badge-secondary"><%= categoria %></span>
                     <% } %>
                 </div>
                 
-                <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="display:block;">
-                    <div class="post-image" style="background:<%= displayImmagine %>;background-size:cover;background-position:center;"></div>
+                <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>">
+                    <div class="recipe-card-image" style="background:<%= displayImmagine %>;background-size:cover;background-position:center;"></div>
                 </a>
                 
-                <div class="post-body">
-                    <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="text-decoration:none;">
-                        <h2 class="post-title"><%= titolo %></h2>
-                    </a>
+                <div class="recipe-card-body">
+                    <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>" class="recipe-card-title"><%= titolo %></a>
                     <% if (tempo > 0) { %>
-                        <p class="text-muted" style="font-size:13px;margin-bottom:8px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;">
-                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <%= tempo %> min
-                        </p>
+                        <div class="recipe-card-meta">
+                            <span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                <%= tempo %> min
+                            </span>
+                        </div>
                     <% } %>
-                    <p class="post-desc"><%= descrizione != null && descrizione.length() > 120 ? descrizione.substring(0, 120) + "..." : (descrizione != null ? descrizione : "") %></p>
+                    <p class="recipe-card-desc"><%= descrizione != null && descrizione.length() > 120 ? descrizione.substring(0, 120) + "..." : (descrizione != null ? descrizione : "") %></p>
                 </div>
                 
-                <div class="post-footer">
+                <div class="recipe-card-footer">
                     <% 
-                        String likeLabel = giaLike ? "Mi piace" : "Mi piace";
                         String likeAction = giaLike ? "rimuovi" : "aggiungi";
                     %>
                     <% if (idUtenteLoggato != null) { %>
@@ -207,7 +206,7 @@ String immagineUrl = rs.getString("immagine_url");
                             </button>
                         </form>
                     <% } else { %>
-                        <a href="home.jsp" class="action-btn">
+                        <a href="login.jsp" class="action-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                             </svg>
