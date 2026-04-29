@@ -1,12 +1,36 @@
-/* settings.css - BakingBread */
-.row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
+.settings-page { padding: 28px 0 56px; }
+.settings-card {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px;
+  border-radius: 28px;
 }
-
-@media (max-width: 768px) {
-    .row {
-        grid-template-columns: 1fr;
-    }
+.settings-form { display: flex; flex-direction: column; gap: 18px; }
+.settings-avatar-row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 22px;
+  align-items: center;
+  padding-bottom: 24px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+.settings-avatar-preview {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54px;
+  font-weight: 900;
+}
+.settings-avatar-copy { display: flex; flex-direction: column; gap: 10px; }
+.file-button { position: relative; overflow: hidden; }
+.hidden-file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.url-input { max-width: 420px; }
+@media (max-width: 720px) {
+  .settings-card { padding: 18px; }
+  .settings-avatar-row { grid-template-columns: 1fr; }
 }

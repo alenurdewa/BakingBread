@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*" %>
+<%@ page import="java.sql.*, com.bakingbread.util.UrlUtils" %>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
@@ -26,7 +26,7 @@
 <body>
     <jsp:include page="navbar.jsp" />
     
-    <main class="container mt-4">
+    <main class="container collections-page mt-4 animate-entrance">
         <div class="profile-header animate-entrance">
             <div class="profile-avatar">
                 <div class="avatar" style="background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;">
@@ -66,13 +66,13 @@
                             hasRicette = true;
                             int idRicetta = rs.getInt("id_ricetta");
                             String titolo = rs.getString("titolo");
-                            String immagineUrl = rs.getString("immagine_url");
+                            String immagineUrl = UrlUtils.resolve(request.getContextPath(), rs.getString("immagine_url"));
                             int tempo = rs.getInt("tempo_preparazione_min");
                             String nomeAutore = rs.getString("nome_visualizzato");
-                            String avatarAutore = rs.getString("avatar_url");
+                            String avatarAutore = UrlUtils.resolve(request.getContextPath(), rs.getString("avatar_url"));
                             
                             String displayImg = immagineUrl != null && !immagineUrl.isEmpty() ? 
-                                "url(" + immagineUrl + ")" : 
+                                "url('" + immagineUrl + "')" : 
                                 "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)";
                 %>
                     <div class="recipe-card" style="position:relative;">
@@ -89,7 +89,7 @@
                                 <div style="display:flex;align-items:center;gap:8px;">
                                     <div style="width:24px;height:24px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;overflow:hidden;">
                                         <% if (avatarAutore != null && !avatarAutore.isEmpty()) { %>
-                                            <img src="<%= avatarAutore %>" alt="<%= nomeAutore %>" style="width:100%;height:100%;object-fit:cover;">
+                                            <img src="<%= avatarAutore %>" alt="<%= nomeAutore %>" class="avatar-cover">
                                         <% } else { %>
                                             <%= nomeAutore.substring(0,1).toUpperCase() %>
                                         <% } %>

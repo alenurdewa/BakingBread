@@ -1,240 +1,114 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*" %>
+<%@ page import="java.sql.*, com.bakingbread.util.UrlUtils" %>
+<%@ page import="java.util.*" %>
+<%!
+    private String esc(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
+    }
+%>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
-    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false";
-    
+    String ctx = request.getContextPath();
     int idProfilo = 0;
-    try { idProfilo = Integer.parseInt(request.getParameter("id")); } catch (Exception e) {}
-    
-    if (idProfilo == 0 && idUtenteLoggato != null) {
-        idProfilo = idUtenteLoggato;
-    }
-    
-    if (idProfilo == 0) {
-        response.sendRedirect("home.jsp");
-        return;
-    }
-    
+    try { idProfilo = Integer.parseInt(request.getParameter("id")); } catch (Exception ignore) {}
+    if (idProfilo == 0 && idUtenteLoggato != null) idProfilo = idUtenteLoggato;
+    if (idProfilo == 0) { response.sendRedirect("home.jsp"); return; }
+
     String username = "", nomeVisualizzato = "", bio = "", avatarUrl = "";
     Timestamp creatoIl = null;
     int numRicette = 0, numFollower = 0, numSeguiti = 0;
     boolean isSeguito = false;
-    boolean isProprioProfilo = idUtenteLoggato != null && idProfilo == idUtenteLoggato;
-    
+    boolean isProprioProfilo = idUtenteLoggato != null && idUtenteLoggato.intValue() == idProfilo;
+
+    class RecipeCard { int id; String titolo, immagine; RecipeCard(int id, String titolo, String immagine) { this.id=id; this.titolo=titolo; this.immagine=immagine; } }
+    List<RecipeCard> recipes = new ArrayList<RecipeCard>();
+
     try {
         Class.forName("com.mysql.cj.jdbc.Driver");
-        Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-        
-        String sql = "SELECT username, nome_visualizzato, bio, avatar_url, creato_il, " +
-            "(SELECT COUNT(*) FROM Ricetta WHERE id_utente = ? AND pubblicata = TRUE) AS num_ricette, " +
-            "(SELECT COUNT(*) FROM Seguito WHERE followed_id = ?) AS num_follower, " +
-            "(SELECT COUNT(*) FROM Seguito WHERE follower_id = ?) AS num_seguiti " +
-            "FROM Utente WHERE id_utente = ?";
-        
-        if (idUtenteLoggato != null) {
-            sql = "SELECT username, nome_visualizzato, bio, avatar_url, creato_il, " +
-                "(SELECT COUNT(*) FROM Ricetta WHERE id_utente = ? AND pubblicata = TRUE) AS num_ricette, " +
-                "(SELECT COUNT(*) FROM Seguito WHERE followed_id = ?) AS num_follower, " +
-                "(SELECT COUNT(*) FROM Seguito WHERE follower_id = ?) AS num_seguiti, " +
-                "(SELECT COUNT(*) FROM Seguito WHERE follower_id = ? AND followed_id = ?) AS is_seguito " +
-                "FROM Utente WHERE id_utente = ?";
-        }
-        
-        PreparedStatement ps = conn.prepareStatement(sql);
-        int p = 1;
-        ps.setInt(p++, idProfilo);
-        ps.setInt(p++, idProfilo);
-        ps.setInt(p++, idProfilo);
-        if (idUtenteLoggato != null) {
-            ps.setInt(p++, idUtenteLoggato);
-            ps.setInt(p++, idProfilo);
-        }
-        ps.setInt(p++, idProfilo);
-        
+        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true", "root", "");
+        PreparedStatement ps = conn.prepareStatement("SELECT username, nome_visualizzato, bio, avatar_url, creato_il FROM Utente WHERE id_utente = ?");
+        ps.setInt(1, idProfilo);
         ResultSet rs = ps.executeQuery();
-        if (rs.next()) {
-            username = rs.getString("username");
-            nomeVisualizzato = rs.getString("nome_visualizzato");
-            bio = rs.getString("bio");
-            avatarUrl = rs.getString("avatar_url");
-            creatoIl = rs.getTimestamp("creato_il");
-            numRicette = rs.getInt("num_ricette");
-            numFollower = rs.getInt("num_follower");
-            numSeguiti = rs.getInt("num_seguiti");
-            if (idUtenteLoggato != null) {
-                isSeguito = rs.getInt("is_seguito") > 0;
-            }
+        if (rs.next()) { username = rs.getString("username"); nomeVisualizzato = rs.getString("nome_visualizzato"); bio = rs.getString("bio"); avatarUrl = UrlUtils.resolve(ctx, rs.getString("avatar_url")); creatoIl = rs.getTimestamp("creato_il"); }
+        rs.close(); ps.close();
+        if (nomeVisualizzato.isEmpty()) { conn.close(); response.sendRedirect("home.jsp"); return; }
+
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM Ricetta WHERE id_utente = ? AND pubblicata = TRUE");
+        ps.setInt(1, idProfilo); rs = ps.executeQuery(); if (rs.next()) numRicette = rs.getInt(1); rs.close(); ps.close();
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM Seguito WHERE followed_id = ?");
+        ps.setInt(1, idProfilo); rs = ps.executeQuery(); if (rs.next()) numFollower = rs.getInt(1); rs.close(); ps.close();
+        ps = conn.prepareStatement("SELECT COUNT(*) FROM Seguito WHERE follower_id = ?");
+        ps.setInt(1, idProfilo); rs = ps.executeQuery(); if (rs.next()) numSeguiti = rs.getInt(1); rs.close(); ps.close();
+
+        if (!isProprioProfilo && idUtenteLoggato != null) {
+            ps = conn.prepareStatement("SELECT 1 FROM Seguito WHERE follower_id = ? AND followed_id = ?");
+            ps.setInt(1, idUtenteLoggato); ps.setInt(2, idProfilo); rs = ps.executeQuery(); isSeguito = rs.next(); rs.close(); ps.close();
         }
-        rs.close();
-        ps.close();
-        conn.close();
-    } catch (Exception e) {}
-    
-    if (username.isEmpty()) {
-        response.sendRedirect("home.jsp");
-        return;
-    }
-    
-    String azione = request.getParameter("azione");
-    if (idUtenteLoggato != null && azione != null && idProfilo != idUtenteLoggato) {
-        try {
-            Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-            if ("segui".equals(azione) && !isSeguito) {
-                PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO Seguito (follower_id, followed_id) VALUES (?, ?)");
-                ps.setInt(1, idUtenteLoggato);
-                ps.setInt(2, idProfilo);
-                ps.executeUpdate();
-                ps.close();
-            } else if ("non_seguire".equals(azione) && isSeguito) {
-                PreparedStatement ps = conn.prepareStatement(
-                    "DELETE FROM Seguito WHERE follower_id = ? AND followed_id = ?");
-                ps.setInt(1, idUtenteLoggato);
-                ps.setInt(2, idProfilo);
-                ps.executeUpdate();
-                ps.close();
-            }
-            conn.close();
-            response.sendRedirect("profile.jsp?id=" + idProfilo);
-            return;
-        } catch (Exception e) {}
-    }
+
+        ps = conn.prepareStatement("SELECT id_ricetta, titolo, immagine_url FROM Ricetta WHERE id_utente = ? AND pubblicata = TRUE ORDER BY creato_il DESC LIMIT 24");
+        ps.setInt(1, idProfilo); rs = ps.executeQuery();
+        while (rs.next()) recipes.add(new RecipeCard(rs.getInt("id_ricetta"), rs.getString("titolo"), rs.getString("immagine_url")));
+        rs.close(); ps.close(); conn.close();
+    } catch (Exception ex) { response.sendRedirect("home.jsp"); return; }
+
+    String initial = nomeVisualizzato != null && !nomeVisualizzato.isEmpty() ? nomeVisualizzato.substring(0, 1).toUpperCase() : "U";
 %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= nomeVisualizzato %> - BakingBread</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/global.css">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profile.css">
-    <link rel="icon" href="${pageContext.request.contextPath}/media/favicon.svg">
+    <title><%= esc(nomeVisualizzato) %> - BakingBread</title>
+    <link rel="stylesheet" href="<%= ctx %>/css/global.css">
+    <link rel="stylesheet" href="<%= ctx %>/css/profile.css">
+    <link rel="icon" href="<%= ctx %>/media/favicon.svg">
 </head>
 <body>
     <jsp:include page="navbar.jsp" />
-    
-    <main class="container mt-4">
-        <div class="profile-header animate-entrance">
-            <div class="profile-avatar">
-                <% if (avatarUrl != null && !avatarUrl.isEmpty()) { %>
-                    <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>">
-                <% } else { %>
-                    <div class="avatar">
-                        <%= nomeVisualizzato.substring(0,1).toUpperCase() %>
-                    </div>
-                <% } %>
+    <main class="container profile-page animate-entrance">
+        <section class="profile-header card">
+            <div class="profile-avatar-wrap">
+                <% if (avatarUrl != null && !avatarUrl.trim().isEmpty()) { %><img src="<%= esc(avatarUrl) %>" alt="<%= esc(nomeVisualizzato) %>" class="profile-avatar-big"><% } else { %><div class="profile-avatar-big profile-avatar-fallback"><%= esc(initial) %></div><% } %>
             </div>
-            
-            <div class="profile-info">
-                <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
-                    <h2><%= nomeVisualizzato %></h2>
+            <div class="profile-info-block">
+                <div class="profile-title-row">
+                    <div><p class="eyebrow">Profilo</p><h1><%= esc(nomeVisualizzato) %></h1><p class="username">@<%= esc(username) %></p></div>
+                    <% if (isProprioProfilo) { %><a href="<%= ctx %>/impostazioni.jsp" class="btn-outline">Modifica profilo</a><% } %>
                     <% if (!isProprioProfilo && idUtenteLoggato != null) { %>
+                    <form method="POST" action="<%= ctx %>/profile/follow" style="display:inline;">
+                        <input type="hidden" name="id" value="<%= idProfilo %>">
                         <% if (isSeguito) { %>
-                            <form method="POST" action="profile.jsp?id=<%= idProfilo %>" style="display:inline;">
-                                <input type="hidden" name="azione" value="non_seguire">
-                                <button type="submit" class="btn-secondary">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                                    </svg>
-                                    Non seguire
-                                </button>
-                            </form>
+                        <input type="hidden" name="action" value="unfollow">
+                        <button type="submit" class="btn-outline">Non seguire</button>
                         <% } else { %>
-                            <form method="POST" action="profile.jsp?id=<%= idProfilo %>" style="display:inline;">
-                                <input type="hidden" name="azione" value="segui">
-                                <button type="submit" class="btn-primary">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                                    </svg>
-                                    Segui
-                                </button>
-                            </form>
+                        <button type="submit" class="btn-primary">Segui</button>
                         <% } %>
-                    <% } %>
-                    <% if (isProprioProfilo) { %>
-                        <a href="impostazioni.jsp" class="btn-outline">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                            Modifica Profilo
-                        </a>
+                    </form>
                     <% } %>
                 </div>
-                
-                <p class="username">@<%= username %></p>
-                
-                <% if (bio != null && !bio.isEmpty()) { %>
-                    <p class="bio"><%= bio %></p>
-                <% } %>
-                
-                <div class="profile-stats">
-                    <a href="network.jsp?id=<%= idProfilo %>&tab=ricette" class="stat-item">
-                        <strong><%= numRicette %></strong>
-                        <span>Ricette</span>
-                    </a>
-                    <a href="network.jsp?id=<%= idProfilo %>&tab=follower" class="stat-item">
-                        <strong><%= numFollower %></strong>
-                        <span>Follower</span>
-                    </a>
-                    <a href="network.jsp?id=<%= idProfilo %>&tab=seguiti" class="stat-item">
-                        <strong><%= numSeguiti %></strong>
-                        <span>Seguiti</span>
-                    </a>
-                </div>
-                
-                <% if (creatoIl != null) { %>
-                    <small class="text-muted" style="display:block;margin-top:15px;">Membro dal <%= creatoIl.toString().substring(0, 10) %></small>
-                <% } %>
+                <% if (bio != null && !bio.trim().isEmpty()) { %><p class="bio"><%= esc(bio) %></p><% } %>
+                <div class="profile-stats"><div class="stat-item"><strong><%= numRicette %></strong><span>Ricette</span></div><div class="stat-item"><strong><%= numFollower %></strong><span>Follower</span></div><div class="stat-item"><strong><%= numSeguiti %></strong><span>Seguiti</span></div></div>
+                <% if (creatoIl != null) { %><p class="profile-meta">Membro dal <%= creatoIl.toString().substring(0, 10) %></p><% } %>
             </div>
-        </div>
-        
-        <div class="mt-4">
-            <h3>Ricette di <%= nomeVisualizzato %></h3>
-            
-            <div class="recipe-grid">
-                <% 
-                    try {
-                        Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-                        PreparedStatement ps = conn.prepareStatement(
-                            "SELECT id_ricetta, titolo, immagine_url, creato_il " +
-                            "FROM Ricetta WHERE id_utente = ? AND pubblicata = TRUE " +
-                            "ORDER BY creato_il DESC LIMIT 20");
-                        ps.setInt(1, idProfilo);
-                        ResultSet rs = ps.executeQuery();
-                        boolean hasRecipes = false;
-                        while (rs.next()) {
-                            hasRecipes = true;
-                            int idR = rs.getInt("id_ricetta");
-                            String titoloR = rs.getString("titolo");
-                            String imgUrl = rs.getString(" immagine_url");
-                            String displayImg = imgUrl != null && !imgUrl.isEmpty() ? "url(" + imgUrl + ")" : "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)";
-                %>
-                    <a href="dettaglio_ricetta.jsp?id=<%= idR %>" class="recipe-card" style="background:<%= displayImg %>;background-size:cover;background-position:center;">
-                        <div class="recipe-card-overlay">
-                            <h4><%= titoloR %></h4>
-                        </div>
+        </section>
+        <section class="profile-recipes">
+            <div class="section-head compact"><div><p class="eyebrow">Ricette</p><h2>Ricette pubblicate</h2></div></div>
+            <div class="recipe-grid profile-recipe-grid">
+                <% for (RecipeCard r : recipes) { %>
+                    <a class="recipe-card" href="<%= ctx %>/dettaglio_ricetta.jsp?id=<%= r.id %>">
+                        <% if (r.immagine != null && !r.immagine.trim().isEmpty()) { %><img src="<%= esc(UrlUtils.resolve(ctx, r.immagine)) %>" alt="<%= esc(r.titolo) %>"><% } else { %><div class="recipe-card-placeholder"></div><% } %>
+                        <div class="recipe-card-overlay"><h3><%= esc(r.titolo) %></h3></div>
                     </a>
-                <% 
-                        }
-                        rs.close();
-                        ps.close();
-                        conn.close();
-                        if (!hasRecipes) {
-                %>
-                    <p class="text-muted">Nessuna ricetta pubblicata.</p>
-                <%
-                        }
-                    } catch (Exception e) {}
-                %>
+                <% } %>
+                <% if (recipes.isEmpty()) { %><p class="empty-state">Nessuna ricetta pubblicata.</p><% } %>
             </div>
-        </div>
+        </section>
     </main>
-    
-    <script src="${pageContext.request.contextPath}/js/main.js"></script>
+    <script src="<%= ctx %>/js/main.js"></script>
 </body>
 </html>

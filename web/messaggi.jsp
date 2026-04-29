@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*" %>
+<%@ page import="java.sql.*, com.bakingbread.util.UrlUtils" %>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
@@ -71,7 +71,7 @@
 <body>
     <jsp:include page="navbar.jsp" />
 
-    <main class="container mt-4">
+    <main class="container messages-page mt-4 animate-entrance">
         <div class="messages-container animate-entrance">
             <div class="messages-sidebar">
                 <div class="messages-sidebar-header">
@@ -154,7 +154,7 @@
                                 int idU = rs.getInt("id_utente");
                                 String nomeU = rs.getString("nome_visualizzato");
                                 String userU = rs.getString("username");
-                                String avatarU = rs.getString("avatar_url");
+                                String avatarU = UrlUtils.resolve(request.getContextPath(), rs.getString("avatar_url"));
                                 String ultimoMsg = rs.getString("ultimo_msg");
                                 Timestamp ultimoData = rs.getTimestamp("ultimo_data");
                                 int nonLetti = rs.getInt("non_letti");
@@ -163,7 +163,7 @@
                         <a href="messaggi.jsp?chat=<%= idU %>" class="conversation-item <%= isActive ? "active" : "" %>">
                             <div class="post-avatar avatar-sm" style="width:44px;height:44px;font-size:16px;flex-shrink:0;">
                                 <% if (avatarU != null && !avatarU.isEmpty()) { %>
-                                    <img src="<%= avatarU %>" alt="<%= nomeU %>" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                                    <img src="<%= avatarU %>" alt="<%= nomeU %>" class="avatar-cover avatar-cover-md">
                                 <% } else { %>
                                     <%= nomeU.substring(0,1).toUpperCase() %>
                                 <% } %>
@@ -215,7 +215,7 @@
                         if (rsU.next()) {
                             nomeChat = rsU.getString("nome_visualizzato");
                             userChat = rsU.getString("username");
-                            avatarChat = rsU.getString("avatar_url");
+                            avatarChat = UrlUtils.resolve(request.getContextPath(), rsU.getString("avatar_url"));
                         }
                         rsU.close();
                         psU.close();
@@ -231,7 +231,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <div class="post-avatar avatar-sm" style="width:40px;height:40px;font-size:16px;">
                                 <% if (avatarChat != null && !avatarChat.isEmpty()) { %>
-                                    <img src="<%= avatarChat %>" alt="<%= nomeChat %>" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+                                    <img src="<%= avatarChat %>" alt="<%= nomeChat %>" class="avatar-cover avatar-cover-sm">
                                 <% } else { %>
                                     <%= nomeChat.substring(0,1).toUpperCase() %>
                                 <% } %>

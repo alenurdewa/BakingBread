@@ -1,3 +1,43 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M16 2C14 2 12.5 3.5 12 5C11.5 4 10 2 7 2C5 2 3 4 3 6C3 9 6 12 9 14C7 15 6 17 6 19C6 22 8 24 11 24C13 24 15 23 16 21C17 23 19 24 21 24C24 24 26 22 26 19C26 17 25 15 23 14C26 12 29 9 29 6C29 4 27 2 25 2C22 2 20.5 3.5 20 5C19.5 3.5 18 2 16 2Z" fill="#ff5a1f"/>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pan" x1="52" y1="36" x2="204" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+
+    <linearGradient id="steam" x1="128" y1="28" x2="128" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#FDE68A" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="shadow" x="0" y="0" width="256" height="256" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="#FFF7ED"/>
+
+  <!-- Steam -->
+  <path d="M102 74C92 62 100 52 106 44C112 36 112 30 106 24"
+        stroke="url(#steam)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M128 82C118 68 126 58 132 48C138 40 138 34 132 28"
+        stroke="url(#steam)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M154 74C144 62 152 52 158 44C164 36 164 30 158 24"
+        stroke="url(#steam)" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Bread / Pot hybrid icon -->
+  <g filter="url(#shadow)">
+    <path d="M72 118C72 84 99 58 133 58C167 58 194 84 194 118V164C194 188 175 208 151 208H105C81 208 62 188 62 164V128C62 122 66 118 72 118Z"
+          fill="url(#pan)"/>
+
+    <!-- Bread scoring -->
+    <path d="M98 108L116 90" stroke="#FFF7ED" stroke-width="8" stroke-linecap="round"/>
+    <path d="M126 112L144 94" stroke="#FFF7ED" stroke-width="8" stroke-linecap="round"/>
+    <path d="M154 116L172 98" stroke="#FFF7ED" stroke-width="8" stroke-linecap="round"/>
+
+    <!-- Pot handle lines / kitchen cue -->
+    <path d="M88 154H168" stroke="#FFF7ED" stroke-width="8" stroke-linecap="round" opacity="0.95"/>
+    <path d="M100 176H156" stroke="#FFF7ED" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+  </g>
 </svg>

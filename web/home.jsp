@@ -1,10 +1,11 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*, java.net.*" %>
+<%@ page import="java.sql.*, java.net.*, com.bakingbread.util.UrlUtils" %>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
+    String ctx = request.getContextPath();
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
     String azione = request.getParameter("azione");
     String tipo = request.getParameter("tipo");
@@ -73,7 +74,7 @@
 <body>
     <jsp:include page="navbar.jsp" />
     
-    <main class="container mt-4">
+    <main class="feed-container animate-entrance">
         <div class="feed-container">
             <% 
                 try {
@@ -120,13 +121,13 @@
                         String descrizione = rs.getString("descrizione");
                         String categoria = rs.getString("categoria");
                         int tempo = rs.getInt("tempo_preparazione_min");
-String immagineUrl = rs.getString("immagine_url");
+String immagineUrl = UrlUtils.resolve(ctx, rs.getString("immagine_url"));
                          Timestamp creatoTs = rs.getTimestamp("creato_il");
                          java.util.Date creato = creatoTs != null ? new java.util.Date(creatoTs.getTime()) : null;
                          int idAutore = rs.getInt("id_utente");
                          String username = rs.getString("username");
                          String nomeVisualizzato = rs.getString("nome_visualizzato");
-                         String avatarUrl = rs.getString("avatar_url");
+                         String avatarUrl = UrlUtils.resolve(ctx, rs.getString("avatar_url"));
                          int numLike = rs.getInt("num_like");
                          int numCommenti = rs.getInt("num_commenti");
                          
@@ -139,7 +140,7 @@ String immagineUrl = rs.getString("immagine_url");
                          
                          String displayImmagine = "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)";
                          if (immagineUrl != null && !immagineUrl.isEmpty()) {
-                             displayImmagine = "url(" + immagineUrl + ")";
+                             displayImmagine = "url('" + immagineUrl + "')";
                          }
             %>
             <article class="recipe-card animate-entrance">
@@ -220,7 +221,7 @@ String immagineUrl = rs.getString("immagine_url");
                         <%= numCommenti %>
                     </a>
                     <% if (idUtenteLoggato != null && idAutore == idUtenteLoggato) { %>
-                        <a href="modifica_ricetta.jsp?id=<%= idRicetta %>" class="action-btn">
+                        <a href="crea_ricetta.jsp?modifica=<%= idRicetta %>" class="action-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>

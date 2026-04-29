@@ -131,11 +131,9 @@
     <div class="auth-wrapper">
         <div class="auth-card animate-entrance">
             <div class="auth-header">
-                <a href="home.jsp" class="navbar-brand" style="justify-content:center;margin-bottom:20px;display:flex;">
-                    <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
-                        <path d="M16 2C14 2 12.5 3.5 12 5C11.5 4 10 2 7 2C5 2 3 4 3 6C3 9 6 12 9 14C7 15 6 17 6 19C6 22 8 24 11 24C13 24 15 23 16 21C17 23 19 24 21 24C24 24 26 22 26 19C26 17 25 15 23 14C26 12 29 9 29 6C29 4 27 2 25 2C22 2 20.5 3.5 20 5C19.5 3.5 18 2 16 2Z" fill="#ff5a1f"/>
-                    </svg>
-                </a>
+                <a href="home.jsp" class="navbar-brand" style="justify-content:center;margin-bottom:20px;">
+    <img src="media/favicon.svg" alt="BakingBread Logo" style="width:40px;height:40px;object-fit:contain;">
+</a>
                 <h2>Crea Account</h2>
                 <p class="text-muted">Unisciti alla community di BakingBread</p>
             </div>

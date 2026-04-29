@@ -1,463 +1,209 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*" %>
+<%@ page import="java.sql.*, java.util.*, com.bakingbread.util.UrlUtils" %>
+<%!
+    private String esc(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
+    }
+%>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
-    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false";
-    
+    if (idUtenteLoggato == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+
+    String ctx = request.getContextPath();
     int idRicetta = 0;
-    try { idRicetta = Integer.parseInt(request.getParameter("id")); } catch (Exception e) {}
-    
-    if (idRicetta == 0) {
+    try { idRicetta = Integer.parseInt(request.getParameter("id")); } catch (Exception ignore) {}
+    if (idRicetta <= 0) {
         response.sendRedirect("home.jsp");
         return;
     }
-    
-    String azione = request.getParameter("azione");
-    String tipo = request.getParameter("tipo");
-    int idTarget = 0;
-    try { idTarget = Integer.parseInt(request.getParameter("target")); } catch (Exception e) {}
-    
-    if (idUtenteLoggato != null && azione != null && idTarget > 0) {
-        try {
-            Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-            
-            if ("mi piace".equals(azione)) {
-                if ("aggiungi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "INSERT IGNORE INTO MiPiace (id_ricetta, id_utente) VALUES (?, ?)");
-                    ps.setInt(1, idRicetta);
-                    ps.setInt(2, idUtenteLoggato);
-                    ps.executeUpdate();
-                    ps.close();
-                } else if ("rimuovi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "DELETE FROM MiPiace WHERE id_ricetta = ? AND id_utente = ?");
-                    ps.setInt(1, idRicetta);
-                    ps.setInt(2, idUtenteLoggato);
-                    ps.executeUpdate();
-                    ps.close();
-                }
-            } else if ("valuta".equals(azione)) {
-                int stelle = 0;
-                try { stelle = Integer.parseInt(request.getParameter("stelle")); } catch (Exception ex) {}
-                if (stelle >= 1 && stelle <= 5) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "INSERT INTO Valutazione (id_ricetta, id_utente, stelle) VALUES (?, ?, ?) " +
-                        "ON DUPLICATE KEY UPDATE stelle = ?");
-                    ps.setInt(1, idRicetta);
-                    ps.setInt(2, idUtenteLoggato);
-                    ps.setInt(3, stelle);
-                    ps.setInt(4, stelle);
-                    ps.executeUpdate();
-                    ps.close();
-                }
-            } else if ("commenta".equals(azione)) {
-                String testo = request.getParameter("testo");
-                if (testo != null && !testo.trim().isEmpty()) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "INSERT INTO Commento (id_ricetta, id_utente, testo) VALUES (?, ?, ?)");
-                    ps.setInt(1, idRicetta);
-                    ps.setInt(2, idUtenteLoggato);
-                    ps.setString(3, testo.trim());
-                    ps.executeUpdate();
-                    ps.close();
-                }
-            } else if ("elimina_commento".equals(azione)) {
-                PreparedStatement ps = conn.prepareStatement(
-                    "DELETE FROM Commento WHERE id_commento = ? AND id_utente = ?");
-                ps.setInt(1, idTarget);
-                ps.setInt(2, idUtenteLoggato);
-                ps.executeUpdate();
-                ps.close();
-            }
-            
-            conn.close();
-            response.sendRedirect("dettaglio_ricetta.jsp?id=" + idRicetta);
-            return;
-        } catch (Exception e) {
-            // ignora errori
-        }
-    }
-    
-    String titolo = "", descrizione = "", categoria = "", immagineUrl = "";
-    int tempoPrep = 0, tempoCottura = 0, porzioni = 0, idAutore = 0;
-    String usernameAutore = "", nomeAutore = "", avatarAutore = "";
-    Timestamp creatoIl = null;
-    String difficolta = "";
-    boolean giaLike = false, giaSalvata = false;
-    int numLike = 0, numCommenti = 0;
-    double mediaVoti = 0;
-    int numValutazioni = 0;
-    int mioVoto = 0;
-    boolean isAutore = false;
-    
+
+    class Ingredient { String nome, quantita, unita; Ingredient(String n, String q, String u) { nome=n; quantita=q; unita=u; } }
+    class Step { int ordine; String descrizione; Step(int o, String d) { ordine=o; descrizione=d; } }
+    class Comment { int id, parentId, userId; String nome, username, avatar, testo; Timestamp data; Comment(int id, int parentId, int userId, String nome, String username, String avatar, String testo, Timestamp data) { this.id=id; this.parentId=parentId; this.userId=userId; this.nome=nome; this.username=username; this.avatar=avatar; this.testo=testo; this.data=data; } }
+
+    Map<String, Object> ricetta = null;
+    List<Ingredient> ingredienti = new ArrayList<Ingredient>();
+    List<Step> passi = new ArrayList<Step>();
+    List<Comment> topComments = new ArrayList<Comment>();
+    Map<Integer, List<Comment>> replies = new HashMap<Integer, List<Comment>>();
+    String autoreAvatar = null;
+    String autoreNome = null;
+    String autoreUsername = null;
+    int totaleCommenti = 0;
+
     try {
         Class.forName("com.mysql.cj.jdbc.Driver");
-        Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-        
-        StringBuilder sql = new StringBuilder(
-            "SELECT r.*, u.id_utente AS uid, u.username, u.nome_visualizzato, u.avatar_url, " +
-            "(SELECT COUNT(*) FROM Valutazione WHERE id_ricetta = r.id_ricetta) AS num_valutazioni, " +
-            "(SELECT AVG(stelle) FROM Valutazione WHERE id_ricetta = r.id_ricetta) AS media_voti ");
-        
-        if (idUtenteLoggato != null) {
-            sql.append(", (SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_like ");
-            sql.append(", (SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS gia_salvata ");
-            sql.append(", (SELECT stelle FROM Valutazione WHERE id_ricetta = r.id_ricetta AND id_utente = ?) AS mio_voto ");
-        } else {
-            sql.append(", 0 AS gia_like, 0 AS gia_salvata, 0 AS mio_voto ");
-        }
-        
-        sql.append("FROM Ricetta r JOIN Utente u ON r.id_utente = u.id_utente ");
-        sql.append("WHERE r.id_ricetta = ?");
-        
-        PreparedStatement ps = conn.prepareStatement(sql.toString());
-        
-        int paramIndex = 1;
-        if (idUtenteLoggato != null) {
-            ps.setInt(paramIndex++, idUtenteLoggato);
-            ps.setInt(paramIndex++, idUtenteLoggato);
-            ps.setInt(paramIndex++, idUtenteLoggato);
-        }
-        ps.setInt(paramIndex++, idRicetta);
-        
+        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true", "root", "");
+
+        PreparedStatement ps = conn.prepareStatement("SELECT r.*, u.nome_visualizzato, u.username, u.avatar_url, u.id_utente AS autore_id FROM Ricetta r JOIN Utente u ON r.id_utente = u.id_utente WHERE r.id_ricetta = ?");
+        ps.setInt(1, idRicetta);
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
-            titolo = rs.getString("titolo");
-            descrizione = rs.getString("descrizione");
-            categoria = rs.getString("categoria");
-            tempoPrep = rs.getInt("tempo_preparazione_min");
-            tempoCottura = rs.getInt("tempo_cottura_min");
-            porzioni = rs.getInt("porzioni");
-            difficolta = rs.getString("difficolta");
-            immagineUrl = rs.getString("immagine_url");
-            creatoIl = rs.getTimestamp("creato_il");
-            idAutore = rs.getInt("uid");
-            usernameAutore = rs.getString("username");
-            nomeAutore = rs.getString("nome_visualizzato");
-            avatarAutore = rs.getString("avatar_url");
-            giaLike = rs.getInt("gia_like") > 0;
-            giaSalvata = rs.getInt("gia_salvata") > 0;
-            numValutazioni = rs.getInt("num_valutazioni");
-            mediaVoti = rs.getDouble("media_voti");
-            mioVoto = rs.getInt("mio_voto");
-            
-            if (idUtenteLoggato != null && idAutore == idUtenteLoggato) {
-                isAutore = true;
-            }
+            ricetta = new HashMap<String, Object>();
+            ricetta.put("titolo", rs.getString("titolo"));
+            ricetta.put("descrizione", rs.getString("descrizione"));
+            ricetta.put("categoria", rs.getString("categoria"));
+            ricetta.put("tempo_preparazione_min", rs.getObject("tempo_preparazione_min"));
+            ricetta.put("tempo_cottura_min", rs.getObject("tempo_cottura_min"));
+            ricetta.put("porzioni", rs.getObject("porzioni"));
+            ricetta.put("difficolta", rs.getString("difficolta"));
+            ricetta.put("dieta", rs.getString("dieta"));
+            ricetta.put("immagine_url", rs.getString("immagine_url"));
+            ricetta.put("autore_id", rs.getInt("autore_id"));
+            ricetta.put("autore_nome", rs.getString("nome_visualizzato"));
+            ricetta.put("autore_username", rs.getString("username"));
+            ricetta.put("autore_avatar", UrlUtils.resolve(ctx, rs.getString("avatar_url")));
+            autoreAvatar = UrlUtils.resolve(ctx, rs.getString("avatar_url"));
+            autoreNome = rs.getString("nome_visualizzato");
+            autoreUsername = rs.getString("username");
         }
         rs.close();
         ps.close();
-        
-        PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = ?");
-        ps2.setInt(1, idRicetta);
-        rs = ps2.executeQuery();
-        if (rs.next()) numLike = rs.getInt(1);
+
+        ps = conn.prepareStatement("SELECT COALESCE(AVG(stelle), 0) AS media_stelle, COUNT(*) AS num_voti FROM Valutazione WHERE id_ricetta = ?");
+        ps.setInt(1, idRicetta);
+        rs = ps.executeQuery();
+        if (rs.next()) {
+            ricetta.put("media_stelle", rs.getDouble("media_stelle"));
+            ricetta.put("num_voti", rs.getInt("num_voti"));
+        }
         rs.close();
-        ps2.close();
-        
-        ps2 = conn.prepareStatement("SELECT COUNT(*) FROM Commento WHERE id_ricetta = ?");
-        ps2.setInt(1, idRicetta);
-        rs = ps2.executeQuery();
-        if (rs.next()) numCommenti = rs.getInt(1);
-        rs.close();
-        ps2.close();
-        
+        ps.close();
+
+        if (ricetta == null) { conn.close(); response.sendRedirect("home.jsp"); return; }
+
+        ps = conn.prepareStatement("SELECT i.nome, ri.quantita, ri.unita_misura FROM RicettaIngrediente ri JOIN Ingrediente i ON ri.id_ingrediente = i.id_ingrediente WHERE ri.id_ricetta = ? ORDER BY ri.ordine_visualizzazione");
+        ps.setInt(1, idRicetta);
+        rs = ps.executeQuery();
+        while (rs.next()) ingredienti.add(new Ingredient(rs.getString("nome"), rs.getString("quantita"), rs.getString("unita_misura")));
+        rs.close(); ps.close();
+
+        ps = conn.prepareStatement("SELECT ordine, descrizione FROM Passaggio WHERE id_ricetta = ? ORDER BY ordine");
+        ps.setInt(1, idRicetta);
+        rs = ps.executeQuery();
+        while (rs.next()) passi.add(new Step(rs.getInt("ordine"), rs.getString("descrizione")));
+        rs.close(); ps.close();
+
+        ps = conn.prepareStatement("SELECT c.id_commento, c.parent_commento, c.id_utente, c.testo, c.creato_il, u.nome_visualizzato, u.username, u.avatar_url FROM Commento c JOIN Utente u ON c.id_utente = u.id_utente WHERE c.id_ricetta = ? ORDER BY c.creato_il ASC");
+        ps.setInt(1, idRicetta);
+        rs = ps.executeQuery();
+        while (rs.next()) {
+            Comment c = new Comment(rs.getInt("id_commento"), rs.getInt("parent_commento"), rs.getInt("id_utente"), rs.getString("nome_visualizzato"), rs.getString("username"), UrlUtils.resolve(ctx, rs.getString("avatar_url")), rs.getString("testo"), rs.getTimestamp("creato_il"));
+            totaleCommenti++;
+            if (c.parentId > 0) {
+                List<Comment> list = replies.get(c.parentId);
+                if (list == null) { list = new ArrayList<Comment>(); replies.put(c.parentId, list); }
+                list.add(c);
+            } else {
+                topComments.add(c);
+            }
+        }
+        rs.close(); ps.close();
         conn.close();
-    } catch (Exception e) {
-        // errore nel caricamento
-    }
-    
-    if (titolo.isEmpty()) {
+    } catch (Exception ex) {
         response.sendRedirect("home.jsp");
         return;
     }
+
+    double media = ricetta.get("media_stelle") != null ? ((Number) ricetta.get("media_stelle")).doubleValue() : 0;
+    int voti = ricetta.get("num_voti") != null ? ((Number) ricetta.get("num_voti")).intValue() : 0;
+    boolean isAutore = idUtenteLoggato != null && idUtenteLoggato.intValue() == ((Number) ricetta.get("autore_id")).intValue();
+    String immagineUrl = UrlUtils.resolve(ctx, ricetta.get("immagine_url") != null ? (String) ricetta.get("immagine_url") : "");
 %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= titolo %> - BakingBread</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/global.css">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/recipe.css">
-    <link rel="icon" href="${pageContext.request.contextPath}/media/favicon.svg">
+    <title><%= esc((String) ricetta.get("titolo")) %> - BakingBread</title>
+    <link rel="stylesheet" href="<%= ctx %>/css/global.css">
+    <link rel="stylesheet" href="<%= ctx %>/css/recipe.css">
+    <link rel="stylesheet" href="<%= ctx %>/css/messages.css">
+    <link rel="icon" href="<%= ctx %>/media/favicon.svg">
 </head>
 <body>
     <jsp:include page="navbar.jsp" />
-    
-    <main class="container mt-4">
-        <article class="post-card animate-entrance">
-            <div class="post-header">
-                <a href="profile.jsp?id=<%= idAutore %>" class="post-avatar" style="text-decoration:none;">
-                    <% if (avatarAutore != null && !avatarAutore.isEmpty()) { %>
-                        <img src="<%= avatarAutore %>" alt="<%= nomeAutore != null ? nomeAutore : "" %>" class="avatar-sm" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
-                    <% } else if (nomeAutore != null && !nomeAutore.isEmpty()) { %>
-                        <%= nomeAutore.substring(0,1).toUpperCase() %>
-                    <% } %>
-                </a>
-                <div>
-                    <a href="profile.jsp?id=<%= idAutore %>" class="post-author-name"><%= nomeAutore != null ? nomeAutore : "" %></a>
-                    <small class="text-muted" style="display:block;"><%= usernameAutore != null ? usernameAutore : "" %></small>
-                </div>
-                <% if (categoria != null && !categoria.isEmpty()) { %>
-                    <span class="badge badge-secondary"><%= categoria %></span>
-                <% } %>
-            </div>
-            
-            <% if (idRicetta > 0) { %>
-                <div class="recipe-image" style="background:<%= immagineUrl != null && !immagineUrl.isEmpty() ? "url(" + immagineUrl + ")" : "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)" %>;background-size:cover;background-position:center;"></div>
-            <% } else { %>
-                <div class="recipe-image" style="background:linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);"></div>
-            <% } %>
-            
-            <div class="post-body">
-                <div class="d-flex align-items-center justify-content-between">
-                    <h1><%= titolo != null ? titolo : "" %></h1>
-                    <% if (idUtenteLoggato != null) { %>
-                        <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="display:inline;">
-                            <input type="hidden" name="azione" value="salva">
-                            <input type="hidden" name="tipo" value="<%= giaSalvata ? "rimuovi" : "aggiungi" %>">
-                            <button type="submit" class="btn-icon <%= giaSalvata ? "btn-primary" : "btn-secondary" %>" title="<%= giaSalvata ? "Rimuovi dai salvati" : "Salva ricetta" %>">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="<%= giaSalvata ? "currentColor" : "none" %>" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </form>
-                    <% } %>
-                </div>
-                
-                <div class="recipe-meta">
-                    <% if (tempoPrep > 0) { %>
-                        <div class="meta-item">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <span><strong>Prep:</strong> <%= tempoPrep %> min</span>
-                        </div>
-                    <% } %>
-                    <% if (tempoCottura > 0) { %>
-                        <div class="meta-item">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                            </svg>
-                            <span><strong>Cottura:</strong> <%= tempoCottura %> min</span>
-                        </div>
-                    <% } %>
-                    <% if (porzioni > 0) { %>
-                        <div class="meta-item">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                            </svg>
-                            <span><strong>Porzioni:</strong> <%= porzioni %></span>
-                        </div>
-                    <% } %>
-                    <% if (difficolta != null && !difficolta.isEmpty()) { 
-                        String difficoltaDisplay = difficolta.substring(0,1).toUpperCase() + difficolta.substring(1);
-                    %>
-                        <div class="meta-item">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                            </svg>
-                            <span><strong>Difficolta:</strong> <%= difficoltaDisplay %></span>
-                        </div>
-                    <% } %>
-                </div>
-                
-                <% if (descrizione != null && !descrizione.isEmpty()) { %>
-                    <div class="recipe-desc mt-4">
-                        <h3>Descrizione</h3>
-                        <p><%= descrizione %></p>
-                    </div>
-                <% } %>
-                
-                <% try {
-                    Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-                    PreparedStatement ps = conn.prepareStatement(
-                        "SELECT i.nome, ri.quantita, ri.unita_misura, ri.note FROM RicettaIngrediente ri " +
-                        "JOIN Ingrediente i ON ri.id_ingrediente = i.id_ingrediente " +
-                        "WHERE ri.id_ricetta = ? ORDER BY ri.ordine_visualizzazione");
-                    ps.setInt(1, idRicetta);
-                    ResultSet rs = ps.executeQuery();
-                    boolean hasIngredienti = false;
-                    while (rs.next()) {
-                        if (!hasIngredienti) {
-                %>
-                <div class="recipe-ingredienti mt-4">
-                    <h3>Ingredienti</h3>
-                    <ul class="ingredienti-list">
-                <%      hasIngredienti = true; }
-                        String nomeIng = rs.getString("nome");
-                        String quantita = rs.getString("quantita");
-                        String unita = rs.getString("unita_misura");
-                        String note = rs.getString("note");
-                %>
-                        <li><%= quantita != null ? quantita : "" %> <%= unita != null ? unita : "" %> <%= nomeIng %> <%= note != null ? " (" + note + ")" : "" %></li>
-                <%     }
-                    rs.close();
-                    ps.close();
-                    conn.close();
-                    if (hasIngredienti) { %>
-                    </ul>
-                </div>
-                <%      }
-                    } catch (Exception ingEx) {}
-                %>
-                
-                <% try {
-                    Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-                    PreparedStatement ps = conn.prepareStatement(
-                        "SELECT ordine, descrizione, immagine_url FROM Passaggio " +
-                        "WHERE id_ricetta = ? ORDER BY ordine");
-                    ps.setInt(1, idRicetta);
-                    ResultSet rs = ps.executeQuery();
-                    boolean hasPassaggi = false;
-                    while (rs.next()) {
-                        if (!hasPassaggi) {
-                %>
-                <div class="recipe-passaggi mt-4">
-                    <h3>Procedimento</h3>
-                    <ol class="passaggi-list">
-                <%      hasPassaggi = true; }
-                        int ordine = rs.getInt("ordine");
-                        String descr = rs.getString("descrizione");
-                        String imgUrl = rs.getString("immagine_url");
-                %>
-                        <li>
-                            <span class="passaggio-numero"><%= ordine %></span>
-                            <p><%= descr %></p>
-                        </li>
-                <%     }
-                    rs.close();
-                    ps.close();
-                    conn.close();
-                    if (hasPassaggi) { %>
-                    </ol>
-                </div>
-                <%      }
-                    } catch (Exception passEx) {}
-                %>
-            </div>
-            
-            <div class="post-footer">
-                <% if (idUtenteLoggato != null) { %>
-                    <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="display:inline;">
-                        <input type="hidden" name="azione" value="mi piace">
-                        <input type="hidden" name="tipo" value="<%= giaLike ? "rimuovi" : "aggiungi" %>">
-                        <button type="submit" class="action-btn <%= giaLike ? "active" : "" %>">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="<%= giaLike ? "currentColor" : "none" %>" stroke="currentColor" stroke-width="2">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                            </svg>
-                            <%= numLike %>
-                        </button>
-                    </form>
-                <% } else { %>
-                    <a href="login.jsp" class="action-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                        <%= numLike %>
+    <main class="container recipe-detail-page animate-entrance">
+        <section class="recipe-hero card">
+            <div class="recipe-hero-media"><img src="<%= esc(immagineUrl == null || immagineUrl.trim().isEmpty() ? ctx + "/media/favicon.svg" : immagineUrl) %>" alt="<%= esc((String) ricetta.get("titolo")) %>" class="recipe-hero-img"></div>
+            <div class="recipe-hero-content">
+                <p class="eyebrow"><%= esc((String) ricetta.get("categoria")) %></p>
+                <h1><%= esc((String) ricetta.get("titolo")) %></h1>
+                <p class="recipe-description"><%= esc((String) ricetta.get("descrizione")) %></p>
+                <div class="author-line">
+                    <a href="profile.jsp?id=<%= ricetta.get("autore_id") %>" class="author-link">
+                        <% if (autoreAvatar != null && !autoreAvatar.trim().isEmpty()) { %><img src="<%= esc(autoreAvatar) %>" alt="Autore" class="author-avatar"><% } else { %><span class="author-avatar author-avatar-fallback"><%= esc(autoreNome != null && !autoreNome.isEmpty() ? autoreNome.substring(0,1) : "U") %></span><% } %>
+                        <span><strong><%= esc(autoreNome) %></strong><small>@<%= esc(autoreUsername) %></small></span>
                     </a>
-                <% } %>
-                
-                <div class="valutazione-stelle">
-                    <span class="text-muted">Valutazione: </span>
-                    <% if (idUtenteLoggato != null) { %>
-                        <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="display:inline;">
-                            <input type="hidden" name="azione" value="valuta">
-                            <% for (int s = 1; s <= 5; s++) { %>
-                                <button type="submit" name="stelle" value="<%= s %>" class="action-btn <%= mioVoto == s ? "active" : "" %>" style="padding:4px;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="<%= s <= mioVoto ? "#fbbf24" : "none" %>" stroke="<%= s <= mioVoto ? "#fbbf24" : "currentColor" %>" stroke-width="2">
-                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                                    </svg>
-                                </button>
-                            <% } %>
-                        </form>
-                    <% } else { %>
-                        <span class="stars">
-                            <% for (int s = 1; s <= 5; s++) { %>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="<%= s <= mediaVoti ? "#fbbf24" : "none" %>" stroke="<%= s <= mediaVoti ? "#fbbf24" : "#d1d5db" %>" stroke-width="2">
-                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                                </svg>
-                            <% } %>
-                        </span>
-                        <span class="text-muted">(<%= numValutazioni %>)</span>
-                    <% } %>
+                    <% if (isAutore) { %><a href="crea_ricetta.jsp?modifica=<%= idRicetta %>" class="btn-outline">Modifica</a><% } %>
+                </div>
+                <div class="recipe-meta-grid">
+                    <div class="meta-chip">Prep: <strong><%= ricetta.get("tempo_preparazione_min") != null ? ricetta.get("tempo_preparazione_min") : "-" %> min</strong></div>
+                    <div class="meta-chip">Cottura: <strong><%= ricetta.get("tempo_cottura_min") != null ? ricetta.get("tempo_cottura_min") : "-" %> min</strong></div>
+                    <div class="meta-chip">Porzioni: <strong><%= ricetta.get("porzioni") != null ? ricetta.get("porzioni") : "-" %></strong></div>
+                    <div class="meta-chip">Difficoltà: <strong><%= esc((String) ricetta.get("difficolta")) %></strong></div>
+                    <div class="meta-chip">Rating: <strong><%= String.format(java.util.Locale.US, "%.1f", media) %></strong> (<%= voti %>)</div>
                 </div>
             </div>
-        </article>
-        
-        <section class="commenti-section mt-4">
-            <h3>Commenti (<%= numCommenti %>)</h3>
-            
-            <% if (idUtenteLoggato != null) { %>
-                <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" class="comment-form mt-3">
-                    <input type="hidden" name="azione" value="commenta">
-                    <textarea name="testo" placeholder="Scrivi un commento..." required></textarea>
-                    <button type="submit" class="btn-primary mt-2">Invia</button>
-                </form>
-            <% } else { %>
-                <p class="text-muted mt-3"><a href="login.jsp">Accedi</a> per commentare</p>
-            <% } %>
-            
-            <% try {
-                Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-                PreparedStatement ps = conn.prepareStatement(
-                    "SELECT c.id_commento, c.testo, c.creato_il, u.id_utente, u.username, u.nome_visualizzato, u.avatar_url " +
-                    "FROM Commento c JOIN Utente u ON c.id_utente = u.id_utente " +
-                    "WHERE c.id_ricetta = ? ORDER BY c.creato_il DESC LIMIT 50");
-                ps.setInt(1, idRicetta);
-                ResultSet rs = ps.executeQuery();
-                while (rs.next()) {
-                    int idCommento = rs.getInt("id_commento");
-                    String testo = rs.getString("testo");
-                    Timestamp creato = rs.getTimestamp("creato_il");
-                    int idCommentatore = rs.getInt("id_utente");
-                    String usernameCommentatore = rs.getString("username");
-                    String nomeCommentatore = rs.getString("nome_visualizzato");
-                    String avatarCommentatore = rs.getString("avatar_url");
-            %>
-            <div class="commento-item mt-3">
-                <div class="commento-header d-flex align-items-center gap-2">
-                    <a href="profile.jsp?id=<%= idCommentatore %>" class="post-avatar avatar-sm">
-                        <% if (avatarCommentatore != null && !avatarCommentatore.isEmpty()) { %>
-                            <img src="<%= avatarCommentatore %>" alt="<%= nomeCommentatore != null ? nomeCommentatore : "" %>" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
-                        <% } else if (nomeCommentatore != null && !nomeCommentatore.isEmpty()) { %>
-                            <%= nomeCommentatore.substring(0,1).toUpperCase() %>
+        </section>
+        <section class="recipe-content-grid">
+            <article class="card recipe-section">
+                <div class="section-head compact"><div><p class="eyebrow">Ingredienti</p><h2>Lista ingredienti</h2></div></div>
+                <div class="ingredient-list">
+                    <% for (Ingredient ing : ingredienti) { %><div class="ingredient-item"><span><%= esc(ing.nome) %></span><span><%= esc(ing.quantita) %> <%= esc(ing.unita) %></span></div><% } %>
+                    <% if (ingredienti.isEmpty()) { %><p class="empty-state">Nessun ingrediente inserito.</p><% } %>
+                </div>
+            </article>
+            <article class="card recipe-section">
+                <div class="section-head compact"><div><p class="eyebrow">Procedimento</p><h2>Passaggi</h2></div></div>
+                <div class="step-list">
+                    <% for (Step step : passi) { %><div class="step-item"><span class="step-number"><%= step.ordine %></span><p><%= esc(step.descrizione) %></p></div><% } %>
+                    <% if (passi.isEmpty()) { %><p class="empty-state">Nessun passaggio inserito.</p><% } %>
+                </div>
+            </article>
+        </section>
+        <section class="card comments-section" id="commenti">
+            <div class="section-head compact"><div><p class="eyebrow">Commenti</p><h2><%= totaleCommenti %> commenti</h2></div></div>
+            <form action="<%= ctx %>/recipe/comment" method="post" class="comment-form">
+                <input type="hidden" name="id_ricetta" value="<%= idRicetta %>">
+                <textarea name="testo" rows="3" placeholder="Scrivi un commento..." required></textarea>
+                <button type="submit" class="btn-primary">Pubblica commento</button>
+            </form>
+            <div class="comment-list">
+                <% if (topComments.isEmpty()) { %><p class="empty-state">Ancora nessun commento. Scrivi il primo.</p><% } %>
+                <% for (Comment c : topComments) { %>
+                    <div class="comment-card">
+                        <div class="comment-top">
+                            <% if (c.avatar != null && !c.avatar.trim().isEmpty()) { %><img src="<%= esc(c.avatar) %>" alt="Avatar" class="comment-avatar"><% } else { %><span class="comment-avatar comment-avatar-fallback"><%= esc(c.nome != null && !c.nome.isEmpty() ? c.nome.substring(0,1) : "U") %></span><% } %>
+                            <div><strong><%= esc(c.nome) %></strong><small>@<%= esc(c.username) %> · <%= c.data != null ? c.data.toString().substring(0, 16) : "" %></small></div>
+                        </div>
+                        <p><%= esc(c.testo) %></p>
+                        <% List<Comment> child = replies.get(c.id); if (child != null && !child.isEmpty()) { %>
+                            <div class="comment-replies">
+                                <% for (Comment r : child) { %>
+                                    <div class="comment-reply">
+                                        <div class="comment-top comment-top-small">
+                                            <% if (r.avatar != null && !r.avatar.trim().isEmpty()) { %><img src="<%= esc(r.avatar) %>" alt="Avatar" class="comment-avatar comment-avatar-small"><% } else { %><span class="comment-avatar comment-avatar-small comment-avatar-fallback"><%= esc(r.nome != null && !r.nome.isEmpty() ? r.nome.substring(0,1) : "U") %></span><% } %>
+                                            <div><strong><%= esc(r.nome) %></strong><small>@<%= esc(r.username) %> · <%= r.data != null ? r.data.toString().substring(0, 16) : "" %></small></div>
+                                        </div>
+                                        <p><%= esc(r.testo) %></p>
+                                    </div>
+                                <% } %>
+                            </div>
                         <% } %>
-                    </a>
-                    <div>
-                        <a href="profile.jsp?id=<%= idCommentatore %>" class="text-primary" style="font-weight:600;"><%= nomeCommentatore != null ? nomeCommentatore : "" %></a>
-                        <small class="text-muted" style="display:block;"><%= usernameCommentatore != null ? usernameCommentatore : "" %></small>
                     </div>
-                    <% if (idUtenteLoggato != null && (idCommentatore == idUtenteLoggato || isAutore)) { %>
-                        <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>" style="margin-left:auto;">
-                            <input type="hidden" name="azione" value="elimina_commento">
-                            <input type="hidden" name="target" value="<%= idCommento %>">
-                            <button type="submit" class="btn-icon text-muted" title="Elimina">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                </svg>
-                            </button>
-                        </form>
-                    <% } %>
-                </div>
-                <p class="mt-2" style="margin-left:52px;"><%= testo != null ? testo : "" %></p>
-                <small class="text-muted" style="margin-left:52px;display:block;"><%= creato != null ? creato : "" %></small>
+                <% } %>
             </div>
-            <%     }
-                rs.close();
-                ps.close();
-                conn.close();
-            } catch (Exception e) {}
-            %>
         </section>
     </main>
-    
-    <script src="${pageContext.request.contextPath}/js/main.js"></script>
+    <script src="<%= ctx %>/js/main.js"></script>
 </body>
 </html>
