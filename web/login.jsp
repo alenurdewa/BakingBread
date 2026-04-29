@@ -88,24 +88,34 @@
                     String nomeVisualizzato = rs.getString("nome_visualizzato");
                     String dbUsername = rs.getString("username");
                     
-                    boolean passwordValida = false;
-                    try {
-                        MessageDigest md = MessageDigest.getInstance("SHA-256");
-                        byte[] salt = storedHash.substring(0, 32).getBytes();
-                        md.update(salt);
-                        byte[] hash = md.digest(password.getBytes("UTF-8"));
-                        StringBuilder hexString = new StringBuilder();
-                        for (byte b : hash) {
-                            String hex = Integer.toHexString(0xff & b);
-                            if (hex.length() == 1) hexString.append('0');
-                            hexString.append(hex);
-                        }
-                        String computedHash = hexString.toString();
-                        passwordValida = storedHash.equals(computedHash);
-                    } catch (Exception hashEx) {
-                        // se hashing fallisce, prova confronto diretto ( retrocompatibilita')
-                        passwordValida = password.equals(storedHash);
-                    }
+                     boolean passwordValida = false;
+                     try {
+                         String storedSaltHex = storedHash.substring(0, 32);
+                         String storedHashHex = storedHash.substring(32);
+                         
+                         // Decodifica hex salt in bytes
+                         byte[] salt = new byte[16];
+                         for (int i = 0; i < 32; i += 2) {
+                             salt[i/2] = (byte) ((Character.digit(storedSaltHex.charAt(i), 16) << 4) 
+                                                + Character.digit(storedSaltHex.charAt(i+1), 16));
+                         }
+                         
+                         MessageDigest md = MessageDigest.getInstance("SHA-256");
+                         md.update(salt);
+                         byte[] hash = md.digest(password.getBytes("UTF-8"));
+                         
+                         StringBuilder hexString = new StringBuilder();
+                         for (byte b : hash) {
+                             String hex = Integer.toHexString(0xff & b);
+                             if (hex.length() == 1) hexString.append('0');
+                             hexString.append(hex);
+                         }
+                         
+                         passwordValida = storedHashHex.equals(hexString.toString());
+                     } catch (Exception hashEx) {
+                         // se hashing fallisce, prova confronto diretto ( retrocompatibilita')
+                         passwordValida = password.equals(storedHash);
+                     }
                     
                     if (passwordValida) {
                         session.setAttribute("id_utente", idUtente);

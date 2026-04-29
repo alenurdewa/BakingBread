@@ -1,74 +1,11 @@
-/* file: webapp/css/recipe.css */
-
-.recipe-container {
-    max-width: 800px;
-    margin: 40px auto;
-    padding: 30px;
-    background: var(--card-bg);
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-md);
-    animation: fadeSlideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-.recipe-header {
-    text-align: center;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 2px dashed var(--border-color);
-}
-
-.recipe-header h2 {
-    font-size: 32px;
-    color: var(--text-main);
-    margin: 0 0 10px 0;
-}
-
-.flex-row {
-    display: flex;
-    gap: 20px;
-}
-
-.flex-row .form-group {
-    flex: 1;
-}
-
-/* Specifico per la textarea dei passaggi */
-textarea.recipe-steps {
-    min-height: 200px;
-    line-height: 1.8;
-}
-
-/* Card di input personalizzata per caricamento immagini */
-.image-upload-box {
-    border: 2px dashed var(--border-color);
-    border-radius: var(--border-radius-md);
-    padding: 40px;
-    text-align: center;
-    background-color: var(--bg-color);
-    cursor: pointer;
-    transition: all var(--transition-smooth);
-    margin-bottom: 20px;
-}
-
-.image-upload-box:hover {
-    border-color: var(--primary-color);
-    background-color: rgba(255, 90, 31, 0.05);
-    transform: scale(1.01);
-}
-
-.image-upload-box p {
-    margin: 0;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-@media (max-width: 768px) {
-    .recipe-container {
-        margin: 20px 10px;
-        padding: 20px;
-    }
-    .flex-row {
-        flex-direction: column;
-        gap: 0;
-    }
-}
+/* recipe.css - BakingBread */
+.recipe-container { max-width: 800px; margin: 40px auto; padding: 30px; background: var(--card-bg); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); animation: fadeSlideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.recipe-header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px dashed var(--border-color); }
+.recipe-header h2 { font-size: 32px; color: var(--text-main); margin: 0 0 10px 0; }
+.flex-row { display: flex; gap: 20px; }
+.flex-row .form-group { flex: 1; }
+textarea.recipe-steps { min-height: 200px; line-height: 1.8; }
+.image-upload-box { border: 2px dashed var(--border-color); border-radius: var(--border-radius-md); padding: 40px; text-align: center; background-color: var(--bg-color); cursor: pointer; transition: all var(--transition-fast); margin-bottom: 20px; }
+.image-upload-box:hover { border-color: var(--primary-color); background-color: rgba(255,90,31,0.05); transform: scale(1.01); }
+.image-upload-box p { margin: 0; color: var(--text-muted); font-weight: 600; }
+@media (max-width: 768px) { .recipe-container { margin: 20px 10px; padding: 20px; } .flex-row { flex-direction: column; gap: 0; } }

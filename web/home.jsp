@@ -88,11 +88,11 @@
                         "(SELECT COUNT(*) FROM Commento WHERE id_ricetta = r.id_ricetta) AS num_commenti ");
                     
                     if (idUtenteLoggato != null) {
-                        sql.append(", (SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_like, ");
-                        sql.append(", (SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_salvata ");
+                        sql.append(", (SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_like");
+                        sql.append(", (SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_salvata");
                     }
                     
-                    sql.append("FROM Ricetta r ");
+                    sql.append(" FROM Ricetta r ");
                     sql.append("JOIN Utente u ON r.id_utente = u.id_utente ");
                     sql.append("WHERE r.pubblicata = TRUE ");
                     
@@ -120,7 +120,7 @@
                         String descrizione = rs.getString("descrizione");
                         String categoria = rs.getString("categoria");
                         int tempo = rs.getInt("tempo_preparazione_min");
-String immagineUrl = rs.getString(" immagine_url");
+String immagineUrl = rs.getString("immagine_url");
                          Timestamp creatoTs = rs.getTimestamp("creato_il");
                          java.util.Date creato = creatoTs != null ? new java.util.Date(creatoTs.getTime()) : null;
                          int idAutore = rs.getInt("id_utente");
