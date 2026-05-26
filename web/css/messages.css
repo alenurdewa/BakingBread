@@ -1,63 +1,619 @@
-.messages-container {
+/*
+ * ============================================================
+ * FILE: messages.css
+ * SCOPO: Stili per la pagina messaggi (messaggi.jsp).
+ * Layout a due colonne: sidebar conversazioni + area chat.
+ * ============================================================
+ */
+
+/* Layout principale a due colonne */
+.messages-layout {
   display: grid;
-  grid-template-columns: 340px 1fr;
-  min-height: calc(100vh - 152px);
-  border-radius: 28px;
-  overflow: hidden;
-  background: rgba(255,255,255,.86);
-}
-.messages-sidebar {
+  grid-template-columns: 320px 1fr; /* Sidebar fissa + chat espandibile */
+  height: calc(100vh - 76px);       /* Tutta l'altezza meno la navbar */
+  overflow: hidden;                  /* Nasconde lo scroll esterno */
+  max-width: 1180px;
+  margin: 0 auto;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
   border-right: 1px solid rgba(148, 163, 184, 0.18);
-  display: flex; flex-direction: column;
+}
+
+/* ---- COLONNA SINISTRA: lista conversazioni ---- */
+.conversations-panel {
+  background: rgba(255, 248, 241, 0.9);   /* Sfondo leggermente caldo */
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  background: rgba(255,248,241,.8);
 }
-.messages-sidebar-header {
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding: 18px 20px; border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-}
-.messages-sidebar-header h3 { margin: 0; font-size: 1.1rem; }
-.conversations-list { flex: 1; overflow-y: auto; }
-.conversation-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 15px 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  color: var(--text-main);
-  transition: background var(--transition-fast), transform var(--transition-fast);
-}
-.conversation-item:hover { background: rgba(255,255,255,.72); }
-.conversation-item.active { background: rgba(255,247,237,.98); box-shadow: inset 3px 0 0 var(--primary-color); }
-.conversation-info { min-width: 0; }
-.messages-content { display: flex; flex-direction: column; overflow: hidden; }
-.messages-header {
-  padding: 15px 20px;
+
+/* Intestazione del pannello conversazioni */
+.conversations-header {
+  padding: 18px 20px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(255,255,255,.8);
+  background: rgba(255, 255, 255, 0.8);
 }
-.messages-body {
+
+.conversations-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+/* Singola voce nella lista conversazioni */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+  color: var(--text-main);
+  text-decoration: none;
+  transition: background 180ms ease;
+  overflow: hidden;
+}
+
+.conversation-item:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* Conversazione attiva (quella aperta) */
+.conversation-item.active {
+  background: rgba(255, 247, 237, 0.98);
+  box-shadow: inset 3px 0 0 var(--primary-color); /* Bordo arancione a sinistra */
+}
+
+/* Anteprima testo dell'ultimo messaggio */
+.conversation-preview {
+  min-width: 0; /* Permette il troncamento del testo */
   flex: 1;
-  overflow-y: auto;
+}
+
+.conversation-preview strong {
+  display: block;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Aggiunge "..." se il testo è troppo lungo */
+}
+
+.conversation-preview small {
+  display: block;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+}
+
+/* ---- COLONNA DESTRA: area chat ---- */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Intestazione della chat (nome interlocutore) */
+.chat-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 1rem;
+  font-weight: 700;
+  flex-shrink: 0; /* Non si restringe */
+}
+
+/* Area messaggi con scroll */
+.chat-messages {
+  flex: 1;         /* Occupa tutto lo spazio disponibile */
+  overflow-y: auto; /* Scroll verticale quando i messaggi superano l'altezza */
   padding: 20px;
-  display: flex; flex-direction: column; gap: 10px;
-  background: linear-gradient(180deg, rgba(248,250,252,.9), rgba(255,255,255,.92));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.92));
 }
+
+/* Stato vuoto della chat (nessun messaggio) */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+}
+
+/* Messaggio "nessun messaggio" inline nell'area chat */
+.chat-empty-inline {
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* Bolla di un singolo messaggio */
 .message-bubble {
-  max-width: 72%; padding: 11px 16px; border-radius: 18px;
-  font-size: 14px; line-height: 1.45;
+  max-width: 72%;           /* Mai più largo del 72% del contenitore */
+  padding: 11px 16px;
+  border-radius: 18px;      /* Angoli arrotondati per l'effetto "bolla" */
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;    /* Spezza le parole lunghe */
 }
-.message-mine { align-self: flex-end; background: var(--primary-gradient); color: #fff; border-bottom-right-radius: 6px; }
-.message-theirs { align-self: flex-start; background: #e2e8f0; color: var(--text-main); border-bottom-left-radius: 6px; }
-.message-text { word-wrap: break-word; }
-.message-time { display: block; font-size: 11px; margin-top: 4px; opacity: .74; }
-.message-mine .message-time { text-align: right; }
-.messages-footer { padding: 15px 20px; border-top: 1px solid rgba(148, 163, 184, 0.16); background: rgba(255,255,255,.9); }
-.messages-empty {
-  display: grid; place-items: center;
-  height: 100%; padding: 40px; text-align: center; color: var(--text-muted);
+
+/* Messaggio INVIATO dall'utente: allineato a destra, sfondo arancione */
+.bubble-out {
+  align-self: flex-end;                    /* Aderisce al bordo destro */
+  background: var(--primary-gradient);    /* Gradiente arancione */
+  color: #fff;
+  border-bottom-right-radius: 5px;        /* Coda in basso a destra */
 }
+
+/* Messaggio RICEVUTO: allineato a sinistra, sfondo grigio chiaro */
+.bubble-in {
+  align-self: flex-start;  /* Aderisce al bordo sinistro */
+  background: #e2e8f0;     /* Grigio chiaro */
+  color: var(--text-main);
+  border-bottom-left-radius: 5px; /* Coda in basso a sinistra */
+}
+
+/* Orario del messaggio */
+.bubble-time {
+  display: block;
+  font-size: 11px;
+  margin-top: 5px;
+  opacity: 0.7;
+}
+
+/* Orario a destra per i messaggi inviati */
+.bubble-out .bubble-time {
+  text-align: right;
+}
+
+/* Area input per scrivere e inviare messaggi */
+.chat-input-area {
+  padding: 14px 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  flex-shrink: 0; /* Non si restringe */
+}
+
+/* Form di invio messaggio */
+.chat-input-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end; /* Allinea in basso quando la textarea cresce */
+}
+
+/* Textarea del messaggio nel form */
+.chat-input-form textarea {
+  flex: 1;         /* Prende tutto lo spazio disponibile */
+  resize: none;    /* Disabilita il resize manuale */
+  border-radius: 16px;
+  max-height: 120px; /* Limita l'altezza massima */
+}
+
+/* ---- AVATAR ---- */
+
+/* Avatar medio (40x40) usato nella lista conversazioni */
+.avatar-md {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Avatar piccolo (36x36) usato nei commenti */
+.avatar-sm {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* Avatar molto piccolo (28x28) usato nelle risposte ai commenti */
+.avatar-xs {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Fallback avatar (quando non c'è immagine): mostra la lettera iniziale */
+.avatar-fallback {
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 900;
+}
+
+/* ---- NETWORK PAGE ---- */
+
+/* Riga tab di navigazione (Seguiti / Follower) */
+.tab-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Singolo pulsante tab */
+.tab-btn {
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text-main);
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 180ms ease;
+}
+
+.tab-btn:hover {
+  background: #fff7ed;
+  border-color: rgba(217, 119, 6, 0.3);
+  color: var(--primary-hover);
+}
+
+/* Tab attiva: sfondo caldo e bordo arancione */
+.tab-btn.active {
+  background: #fff7ed;
+  border-color: rgba(217, 119, 6, 0.35);
+  color: var(--primary-hover);
+}
+
+/* Lista utenti nel network */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Singolo elemento della lista utenti */
+.user-list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+/* Link al profilo nella lista */
+.user-avatar-link {
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* ---- DETTAGLIO RICETTA ---- */
+
+/* Layout header ricetta: immagine a sinistra, info a destra */
+.recipe-detail-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-bottom: 24px;
+}
+
+/* Contenitore immagine di copertina */
+.recipe-detail-image {
+  border-radius: 24px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, #fff1e8, #ffe7d2);
+}
+
+.recipe-detail-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Metadati: titolo, autore, statistiche */
+.recipe-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Riga autore con avatar e pulsanti */
+.recipe-detail-author {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Link al profilo autore */
+.author-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+/* Statistiche rapide: tempo, difficoltà, porzioni */
+.recipe-quick-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Singola statistica */
+.recipe-quick-stats .stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 248, 241, 0.9);
+  border: 1px solid rgba(217, 119, 6, 0.12);
+  border-radius: 14px;
+  min-width: 60px;
+}
+
+.recipe-quick-stats .stat-item strong {
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.recipe-quick-stats .stat-item span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* Pulsanti azioni ricetta (like, salva) */
+.recipe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Lista ingredienti (puntata) */
+.ingredients-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ingredients-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+}
+
+/* Quantità dell'ingrediente (in grassetto) */
+.ingredient-qty {
+  font-weight: 700;
+  color: var(--primary-hover);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+/* Nome dell'ingrediente */
+.ingredient-name {
+  color: var(--text-main);
+}
+
+/* Lista passaggi (numerata) */
+.steps-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.steps-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+}
+
+.steps-list li p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Badge con il numero del passaggio */
+.step-number-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+/* ---- COMMENTI ---- */
+
+/* Singolo commento principale */
+.comment {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+/* Risposta a un commento (rientrata a sinistra) */
+.comment-reply {
+  margin-left: 40px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+/* Corpo del commento (a destra dell'avatar) */
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Intestazione commento: nome + data */
+.comment-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.comment-header a {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.comment-header a:hover {
+  color: var(--primary-hover);
+}
+
+.comment-body p {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+/* Form di scrittura commento */
+.comment-form {
+  display: grid;
+  gap: 10px;
+}
+
+/* ---- RIGHE INGREDIENTE E PASSAGGIO NEL FORM ---- */
+
+/* Riga ingrediente nel form crea ricetta */
+.ingredient-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto; /* nome | quantità | unità | pulsante */
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+/* Riga passaggio nel form crea ricetta */
+.step-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto; /* numero | textarea | pulsante */
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+/* Numero del passaggio nel form (1, 2, 3...) */
+.step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 12px; /* Allineato con la prima riga della textarea */
+}
+
+/* Pulsante rosso per eliminare righe */
+.btn-danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger-color);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  cursor: pointer;
+  border-radius: 999px;
+  font-weight: 700;
+  transition: all 180ms ease;
+}
+
+.btn-danger:hover {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+/* Checkbox con label affiancata */
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* ---- RESPONSIVE ---- */
 @media (max-width: 860px) {
-  .messages-container { grid-template-columns: 1fr; min-height: auto; }
-  .messages-sidebar { display: none; }
-  .messages-sidebar.active { display: flex; }
-  .message-bubble { max-width: 88%; }
+  /* Su mobile mostra solo una colonna alla volta */
+  .messages-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  /* La chat prende tutta l'altezza disponibile */
+  .chat-panel {
+    height: calc(100vh - 76px);
+  }
+
+  .recipe-detail-header {
+    grid-template-columns: 1fr; /* Una colonna su mobile */
+  }
+
+  .ingredient-row {
+    grid-template-columns: 1fr 1fr; /* Ridotto a 2 colonne */
+    grid-template-rows: auto auto;
+  }
+
+  .step-row {
+    grid-template-columns: auto 1fr auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .message-bubble {
+    max-width: 88%; /* Più larghezza per le bolle su schermi piccoli */
+  }
+
+  .ingredient-row {
+    grid-template-columns: 1fr; /* Una colonna su schermi piccoli */
+  }
 }

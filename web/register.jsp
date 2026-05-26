@@ -1,121 +1,174 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*, java.security.*, java.util.*" %>
+<%@ page import="java.sql.*" %>
+<%@ page import="java.security.*" %>
+<%--
+    ============================================================
+    FILE: register.jsp
+    SCOPO: Gestisce la registrazione di un nuovo utente.
+    - Se l'utente è già loggato → reindirizza a home.jsp
+    - Se il form è inviato (POST) → valida i dati e registra
+    - Se la registrazione va a buon fine → crea la sessione
+    - Se ci sono errori → mostra il form con i messaggi
+    ============================================================
+--%>
 <%
-    // Header per evitare cache
+    // Impedisce la cache del browser su questa pagina sensibile
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
-    String errorMsg = "";
-    String successMsg = "";
-    
-    // Se l'utente è già loggato, reindirizza alla home
+    String errorMsg   = ""; // Errore da mostrare all'utente
+    String successMsg = ""; // Messaggio di successo (non usato qui)
+
+    // Se l'utente è già loggato, non deve poter registrarsi di nuovo
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
     if (idUtenteLoggato != null) {
         response.sendRedirect("home.jsp");
         return;
     }
-    
-    // Parametri DB - Modificati per Driver 9.6.0 e sicurezza timezone
-    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true";
-    String dbUser = "root";
-    String dbPass = ""; // Inserisci la tua password se presente
-    
+
+    // --------------------------------------------------------
+    // BLOCCO POST: eseguito quando l'utente clicca "Registrati"
+    // --------------------------------------------------------
     if ("POST".equalsIgnoreCase(request.getMethod())) {
-        String username = request.getParameter("username");
-        String email = request.getParameter("email");
-        String password = request.getParameter("password");
+
+        // Legge i dati inseriti nel form di registrazione
+        String username         = request.getParameter("username");
+        String email            = request.getParameter("email");
+        String password         = request.getParameter("password");
         String confermaPassword = request.getParameter("conferma_password");
-        
-        // Validazione Input
+
+        // ---- VALIDAZIONE DEI DATI ----
+        // Controlla ogni campo in sequenza con if-else
+
         if (username == null || username.trim().isEmpty()) {
             errorMsg = "Inserisci il nome utente.";
-        } else if (username.length() < 3 || username.length() > 50) {
-            errorMsg = "Il nome utente deve essere tra 3 e 50 caratteri.";
-        } else if (!username.matches("^[a-zA-Z0-9_]+$")) {
-            errorMsg = "Il nome utente può contenere solo lettere, numeri e underscore.";
+
+        } else if (username.trim().length() < 3 || username.trim().length() > 50) {
+            errorMsg = "Il nome utente deve avere tra 3 e 50 caratteri.";
+
+        } else if (!username.trim().matches("^[a-zA-Z0-9_]+$")) {
+            // Solo lettere, numeri e underscore: niente spazi o simboli
+            errorMsg = "Il nome utente può contenere solo lettere, numeri e _.";
+
         } else if (email == null || email.trim().isEmpty()) {
             errorMsg = "Inserisci l'indirizzo email.";
-        } else if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+
+        } else if (!email.trim().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            // Formato email basico: qualcosa@dominio.ext
             errorMsg = "Inserisci un indirizzo email valido.";
+
         } else if (password == null || password.length() < 8) {
-            errorMsg = "La password deve essere di almeno 8 caratteri.";
+            errorMsg = "La password deve avere almeno 8 caratteri.";
+
         } else if (!password.equals(confermaPassword)) {
-            errorMsg = "Le password non corrispondono.";
+            errorMsg = "Le due password non corrispondono.";
+
         } else {
-            // Logica di Registrazione
+            // Tutti i campi sono validi: tentiamo la registrazione
+
             Connection conn = null;
-            PreparedStatement ps = null;
-            ResultSet rs = null;
             try {
-                // Caricamento Driver (per mysql-connector-j-9.6.0.jar)
-                Class.forName("com.mysql.cj.jdbc.Driver");
-                conn = DriverManager.getConnection(dbUrl, dbUser, dbPass);
-                
-                // 1. Controllo se utente o email esistono già
-                ps = conn.prepareStatement("SELECT id_utente FROM Utente WHERE username = ? OR email = ?");
-                ps.setString(1, username.trim());
-                ps.setString(2, email.trim().toLowerCase());
-                rs = ps.executeQuery();
-                
-                if (rs.next()) {
-                    errorMsg = "Nome utente o email già in uso.";
+                conn = com.bakingbread.util.Db.getConnection();
+
+                // Controlla se username o email sono già in uso nel DB
+                PreparedStatement psCheck = conn.prepareStatement(
+                    "SELECT id_utente FROM Utente WHERE username = ? OR email = ?"
+                );
+                psCheck.setString(1, username.trim());
+                psCheck.setString(2, email.trim().toLowerCase());
+                ResultSet rsCheck = psCheck.executeQuery();
+
+                if (rsCheck.next()) {
+                    // Trovato un utente con stesso username o email
+                    errorMsg = "Nome utente o email già registrati.";
+                    rsCheck.close();
+                    psCheck.close();
+
                 } else {
-                    // 2. Generazione SALT e HASH SHA-256
+                    rsCheck.close();
+                    psCheck.close();
+
+                    // ---- CALCOLO HASH DELLA PASSWORD ----
+                    // Non salviamo mai la password in chiaro!
+                    // Usiamo SHA-256 con un "sale" casuale per sicurezza.
+
+                    // Genera 16 byte casuali come "sale" (salt)
                     SecureRandom random = new SecureRandom();
                     byte[] salt = new byte[16];
-                    random.nextBytes(salt);
-                    
+                    random.nextBytes(salt); // Riempie l'array con byte casuali
+
+                    // Converte il salt in stringa esadecimale (32 caratteri)
                     StringBuilder saltHex = new StringBuilder();
-                    for (byte b : salt) {
-                        String hex = Integer.toHexString(0xff & b);
-                        if (hex.length() == 1) saltHex.append('0');
+                    for (int i = 0; i < salt.length; i++) {
+                        String hex = Integer.toHexString(0xff & salt[i]);
+                        if (hex.length() == 1) {
+                            saltHex.append('0'); // Aggiunge zero iniziale se serve
+                        }
                         saltHex.append(hex);
                     }
-                    
+
+                    // Calcola SHA-256(salt + password)
                     MessageDigest md = MessageDigest.getInstance("SHA-256");
-                    md.update(salt);
-                    byte[] hash = md.digest(password.getBytes("UTF-8"));
-                    
+                    md.update(salt); // Prima aggiunge il salt
+                    byte[] hashBytes = md.digest(password.getBytes("UTF-8")); // Poi la password
+
+                    // Converte l'hash in stringa esadecimale (64 caratteri)
                     StringBuilder hashHex = new StringBuilder();
-                    for (byte b : hash) {
-                        String hex = Integer.toHexString(0xff & b);
-                        if (hex.length() == 1) hashHex.append('0');
+                    for (int i = 0; i < hashBytes.length; i++) {
+                        String hex = Integer.toHexString(0xff & hashBytes[i]);
+                        if (hex.length() == 1) {
+                            hashHex.append('0');
+                        }
                         hashHex.append(hex);
                     }
-                    
-                    // Concateniamo salt (32 chars) + hash (64 chars)
+
+                    // Combina: salt(32 chars) + hash(64 chars) = 96 chars totali
                     String passwordHash = saltHex.toString() + hashHex.toString();
-                    
-                    // 3. Inserimento nuovo utente
-                    // Nota: Chiudiamo il vecchio ps prima di aprirne uno nuovo
-                    ps.close(); 
-                    ps = conn.prepareStatement(
+
+                    // ---- INSERIMENTO NEL DATABASE ----
+                    PreparedStatement psInsert = conn.prepareStatement(
                         "INSERT INTO Utente (username, email, password_hash, nome_visualizzato, attivo) " +
-                        "VALUES (?, ?, ?, ?, TRUE)");
-                    ps.setString(1, username.trim());
-                    ps.setString(2, email.trim().toLowerCase());
-                    ps.setString(3, passwordHash);
-                    ps.setString(4, username.trim()); // Nome visualizzato default = username
-                    
-                    if (ps.executeUpdate() > 0) {
-                        successMsg = "Account creato con successo! Ora puoi <a href='login.jsp'>accedere</a>.";
+                        "VALUES (?, ?, ?, ?, TRUE)",
+                        PreparedStatement.RETURN_GENERATED_KEYS // Recupera l'ID generato
+                    );
+                    psInsert.setString(1, username.trim());
+                    psInsert.setString(2, email.trim().toLowerCase()); // Email in minuscolo
+                    psInsert.setString(3, passwordHash);
+                    psInsert.setString(4, username.trim()); // Nome = username di default
+                    psInsert.executeUpdate();
+
+                    // Recupera l'ID dell'utente appena creato
+                    ResultSet rsKeys = psInsert.getGeneratedKeys();
+                    int nuovoId = 0;
+                    if (rsKeys.next()) {
+                        nuovoId = rsKeys.getInt(1); // Legge l'ID auto-generato
                     }
+                    rsKeys.close();
+                    psInsert.close();
+                    conn.close();
+
+                    // ---- CREAZIONE SESSIONE ----
+                    // Registrazione riuscita: loggaamo subito l'utente
+                    session.setAttribute("id_utente",   nuovoId);
+                    session.setAttribute("username",    username.trim());
+                    session.setAttribute("nome_utente", username.trim());
+                    session.setAttribute("avatar_url",  null);
+
+                    // Vai alla home
+                    response.sendRedirect("home.jsp");
+                    return;
                 }
-            } catch (ClassNotFoundException e) {
-                errorMsg = "Errore critico: Driver JDBC non trovato. Controlla WEB-INF/lib.";
-            } catch (SQLException e) {
-                errorMsg = "Errore Database: " + e.getMessage();
+
             } catch (Exception e) {
-                errorMsg = "Errore imprevisto: " + e.getMessage();
+                errorMsg = "Errore durante la registrazione. Riprova.";
             } finally {
-                // CHIUSURA RISORSE (Fondamentale)
-                if (rs != null) try { rs.close(); } catch (Exception e) {}
-                if (ps != null) try { ps.close(); } catch (Exception e) {}
-                if (conn != null) try { conn.close(); } catch (Exception e) {}
+                if (conn != null) {
+                    try { conn.close(); } catch (Exception ignore) {}
+                }
             }
         }
-    }
+    } // fine blocco POST
 %>
 <!DOCTYPE html>
 <html lang="it">
@@ -130,98 +183,94 @@
 <body>
     <div class="auth-wrapper">
         <div class="auth-card animate-entrance">
+
             <div class="auth-header">
-                <a href="home.jsp" class="navbar-brand" style="justify-content:center;margin-bottom:20px;">
-    <img src="media/favicon.svg" alt="BakingBread Logo" style="width:40px;height:40px;object-fit:contain;">
-</a>
-                <h2>Crea Account</h2>
+                <a href="home.jsp" style="justify-content:center; margin-bottom:20px; display:flex;">
+                    <img src="${pageContext.request.contextPath}/media/favicon.svg"
+                         alt="BakingBread Logo" style="width:40px; height:40px;">
+                </a>
+                <h2>Crea il tuo account</h2>
                 <p class="text-muted">Unisciti alla community di BakingBread</p>
             </div>
-            
+
+            <%-- Messaggio di errore (visibile solo se errorMsg non è vuoto) --%>
             <% if (!errorMsg.isEmpty()) { %>
-                <div class="alert alert-error">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;flex-shrink:0;">
-                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    <%= errorMsg %>
+                <div class="alert alert-error animate-entrance">
+                    ⚠ <%= errorMsg %>
                 </div>
             <% } %>
-            
-            <% if (!successMsg.isEmpty()) { %>
-                <div class="alert alert-success">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;flex-shrink:0;">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                    </svg>
-                    <%= successMsg %>
-                </div>
-            <% } %>
-            
-            <form method="POST" action="register.jsp" accept-charset="UTF-8">
+
+            <%-- Form di registrazione: POST a questa stessa pagina --%>
+            <form method="POST" action="register.jsp" accept-charset="UTF-8" id="registerForm">
+
+                <!-- Campo username -->
                 <div class="form-group">
                     <label for="username">Nome utente</label>
-                    <input type="text" id="username" name="username" required 
-                           autocomplete="username" maxlength="50" pattern="[a-zA-Z0-9_]+"
-                           value="<%= (request.getParameter("username") != null) ? request.getParameter("username") : "" %>">
-                    <small class="text-muted" style="font-size:11px;">Solo lettere, numeri e underscore (_)</small>
+                    <input type="text"
+                           id="username"
+                           name="username"
+                           required
+                           minlength="3"
+                           maxlength="50"
+                           placeholder="es. mario_rossi"
+                           value="<%= request.getParameter("username") != null ? request.getParameter("username") : "" %>">
                 </div>
-                
+
+                <!-- Campo email -->
                 <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" required 
-                           autocomplete="email" maxlength="100"
-                           value="<%= (request.getParameter("email") != null) ? request.getParameter("email") : "" %>">
+                    <label for="email">Indirizzo email</label>
+                    <input type="email"
+                           id="email"
+                           name="email"
+                           required
+                           maxlength="100"
+                           placeholder="es. mario@email.it"
+                           value="<%= request.getParameter("email") != null ? request.getParameter("email") : "" %>">
                 </div>
-                
+
+                <!-- Campo password con toggle visibilità -->
                 <div class="form-group">
                     <label for="password">Password</label>
                     <div style="position:relative;">
-                        <input type="password" id="password" name="password" required 
-                               autocomplete="new-password" minlength="8">
-                        <button type="button" class="password-toggle" onclick="togglePassword('password')">
-                            <svg id="eyeIcon1" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                            </svg>
+                        <input type="password"
+                               id="password"
+                               name="password"
+                               required
+                               minlength="8"
+                               autocomplete="new-password">
+                        <button type="button"
+                                class="password-toggle"
+                                id="togglePassword"
+                                aria-label="Mostra o nascondi la password">
+                            👁
                         </button>
                     </div>
-                    <small class="text-muted" style="font-size:11px;">Minimo 8 caratteri</small>
                 </div>
-                
+
+                <!-- Campo conferma password -->
                 <div class="form-group">
-                    <label for="conferma_password">Conferma Password</label>
-                    <div style="position:relative;">
-                        <input type="password" id="conferma_password" name="conferma_password" required 
-                               autocomplete="new-password" minlength="8">
-                        <button type="button" class="password-toggle" onclick="togglePassword('conferma_password')">
-                            <svg id="eyeIcon2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                            </svg>
-                        </button>
-                    </div>
+                    <label for="conferma_password">Conferma password</label>
+                    <input type="password"
+                           id="conferma_password"
+                           name="conferma_password"
+                           required
+                           minlength="8"
+                           autocomplete="new-password">
                 </div>
-                
-                <button type="submit" class="btn-primary" style="width:100%;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
-                    </svg>
+
+                <!-- Pulsante di invio -->
+                <button type="submit" class="btn-primary mt-3" style="width:100%;">
                     Registrati
                 </button>
             </form>
-            
-            <p class="text-center mt-4 text-muted" style="font-size:14px;">
+
+            <p class="text-center mt-3 text-muted" style="font-size:14px;">
                 Hai già un account? <a href="login.jsp">Accedi</a>
             </p>
+
         </div>
     </div>
-    
-    <script>
-    function togglePassword(inputId) {
-        var input = document.getElementById(inputId);
-        if (input.type === 'password') {
-            input.type = 'text';
-        } else {
-            input.type = 'password';
-        }
-    }
-    </script>
+
+    <script src="${pageContext.request.contextPath}/js/register.js"></script>
 </body>
 </html>

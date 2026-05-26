@@ -1,209 +1,526 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*, java.util.*, com.bakingbread.util.UrlUtils" %>
-<%!
-    private String esc(String value) {
-        if (value == null) return "";
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
-    }
-%>
+<%@ page import="java.sql.*" %>
+<%@ page import="com.bakingbread.util.*" %>
+<%@ page import="com.bakingbread.model.*" %>
+<%--
+    ============================================================
+    FILE: dettaglio_ricetta.jsp
+    SCOPO: Mostra tutti i dettagli di una singola ricetta.
+    Parametri GET: ?id=N  (ID della ricetta da visualizzare)
+    - Mostra titolo, immagine, autore, ingredienti, passaggi
+    - Mostra i commenti (principali + risposte)
+    - POST → inserisce un nuovo commento o risposta
+    ============================================================
+--%>
 <%
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
+    String ctx = request.getContextPath();
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
     if (idUtenteLoggato == null) {
         response.sendRedirect("login.jsp");
         return;
     }
 
-    String ctx = request.getContextPath();
+    // Legge l'ID della ricetta dall'URL (?id=N)
     int idRicetta = 0;
-    try { idRicetta = Integer.parseInt(request.getParameter("id")); } catch (Exception ignore) {}
-    if (idRicetta <= 0) {
-        response.sendRedirect("home.jsp");
+    try {
+        idRicetta = Integer.parseInt(request.getParameter("id"));
+    } catch (Exception e) {
+        response.sendRedirect("home.jsp"); // ID mancante o non valido
         return;
     }
 
-    class Ingredient { String nome, quantita, unita; Ingredient(String n, String q, String u) { nome=n; quantita=q; unita=u; } }
-    class Step { int ordine; String descrizione; Step(int o, String d) { ordine=o; descrizione=d; } }
-    class Comment { int id, parentId, userId; String nome, username, avatar, testo; Timestamp data; Comment(int id, int parentId, int userId, String nome, String username, String avatar, String testo, Timestamp data) { this.id=id; this.parentId=parentId; this.userId=userId; this.nome=nome; this.username=username; this.avatar=avatar; this.testo=testo; this.data=data; } }
+    String errorMsg   = "";
 
-    Map<String, Object> ricetta = null;
-    List<Ingredient> ingredienti = new ArrayList<Ingredient>();
-    List<Step> passi = new ArrayList<Step>();
-    List<Comment> topComments = new ArrayList<Comment>();
-    Map<Integer, List<Comment>> replies = new HashMap<Integer, List<Comment>>();
-    String autoreAvatar = null;
-    String autoreNome = null;
-    String autoreUsername = null;
-    int totaleCommenti = 0;
-
-    try {
-        Class.forName("com.mysql.cj.jdbc.Driver");
-        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/bakingbread?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true", "root", "");
-
-        PreparedStatement ps = conn.prepareStatement("SELECT r.*, u.nome_visualizzato, u.username, u.avatar_url, u.id_utente AS autore_id FROM Ricetta r JOIN Utente u ON r.id_utente = u.id_utente WHERE r.id_ricetta = ?");
-        ps.setInt(1, idRicetta);
-        ResultSet rs = ps.executeQuery();
-        if (rs.next()) {
-            ricetta = new HashMap<String, Object>();
-            ricetta.put("titolo", rs.getString("titolo"));
-            ricetta.put("descrizione", rs.getString("descrizione"));
-            ricetta.put("categoria", rs.getString("categoria"));
-            ricetta.put("tempo_preparazione_min", rs.getObject("tempo_preparazione_min"));
-            ricetta.put("tempo_cottura_min", rs.getObject("tempo_cottura_min"));
-            ricetta.put("porzioni", rs.getObject("porzioni"));
-            ricetta.put("difficolta", rs.getString("difficolta"));
-            ricetta.put("dieta", rs.getString("dieta"));
-            ricetta.put("immagine_url", rs.getString("immagine_url"));
-            ricetta.put("autore_id", rs.getInt("autore_id"));
-            ricetta.put("autore_nome", rs.getString("nome_visualizzato"));
-            ricetta.put("autore_username", rs.getString("username"));
-            ricetta.put("autore_avatar", UrlUtils.resolve(ctx, rs.getString("avatar_url")));
-            autoreAvatar = UrlUtils.resolve(ctx, rs.getString("avatar_url"));
-            autoreNome = rs.getString("nome_visualizzato");
-            autoreUsername = rs.getString("username");
+    // --------------------------------------------------------
+    // GESTIONE POST: inserimento di un commento
+    // --------------------------------------------------------
+    if ("POST".equalsIgnoreCase(request.getMethod())) {
+        String testo    = request.getParameter("testo");
+        int    idParent = 0;
+        try {
+            idParent = Integer.parseInt(request.getParameter("id_parent")); // 0 = commento principale
+        } catch (Exception e) {
+            idParent = 0;
         }
-        rs.close();
-        ps.close();
 
-        ps = conn.prepareStatement("SELECT COALESCE(AVG(stelle), 0) AS media_stelle, COUNT(*) AS num_voti FROM Valutazione WHERE id_ricetta = ?");
-        ps.setInt(1, idRicetta);
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            ricetta.put("media_stelle", rs.getDouble("media_stelle"));
-            ricetta.put("num_voti", rs.getInt("num_voti"));
-        }
-        rs.close();
-        ps.close();
-
-        if (ricetta == null) { conn.close(); response.sendRedirect("home.jsp"); return; }
-
-        ps = conn.prepareStatement("SELECT i.nome, ri.quantita, ri.unita_misura FROM RicettaIngrediente ri JOIN Ingrediente i ON ri.id_ingrediente = i.id_ingrediente WHERE ri.id_ricetta = ? ORDER BY ri.ordine_visualizzazione");
-        ps.setInt(1, idRicetta);
-        rs = ps.executeQuery();
-        while (rs.next()) ingredienti.add(new Ingredient(rs.getString("nome"), rs.getString("quantita"), rs.getString("unita_misura")));
-        rs.close(); ps.close();
-
-        ps = conn.prepareStatement("SELECT ordine, descrizione FROM Passaggio WHERE id_ricetta = ? ORDER BY ordine");
-        ps.setInt(1, idRicetta);
-        rs = ps.executeQuery();
-        while (rs.next()) passi.add(new Step(rs.getInt("ordine"), rs.getString("descrizione")));
-        rs.close(); ps.close();
-
-        ps = conn.prepareStatement("SELECT c.id_commento, c.parent_commento, c.id_utente, c.testo, c.creato_il, u.nome_visualizzato, u.username, u.avatar_url FROM Commento c JOIN Utente u ON c.id_utente = u.id_utente WHERE c.id_ricetta = ? ORDER BY c.creato_il ASC");
-        ps.setInt(1, idRicetta);
-        rs = ps.executeQuery();
-        while (rs.next()) {
-            Comment c = new Comment(rs.getInt("id_commento"), rs.getInt("parent_commento"), rs.getInt("id_utente"), rs.getString("nome_visualizzato"), rs.getString("username"), UrlUtils.resolve(ctx, rs.getString("avatar_url")), rs.getString("testo"), rs.getTimestamp("creato_il"));
-            totaleCommenti++;
-            if (c.parentId > 0) {
-                List<Comment> list = replies.get(c.parentId);
-                if (list == null) { list = new ArrayList<Comment>(); replies.put(c.parentId, list); }
-                list.add(c);
-            } else {
-                topComments.add(c);
+        if (testo != null && !testo.trim().isEmpty()) {
+            Connection connPost = null;
+            try {
+                connPost = Db.getConnection();
+                PreparedStatement ps = connPost.prepareStatement(
+                    "INSERT INTO Commento (id_ricetta, id_utente, id_parent, testo) VALUES (?,?,?,?)"
+                );
+                ps.setInt(1, idRicetta);
+                ps.setInt(2, idUtenteLoggato);
+                // Se idParent è 0, salva NULL nel DB (nessun commento padre)
+                if (idParent > 0) {
+                    ps.setInt(3, idParent);
+                } else {
+                    ps.setNull(3, java.sql.Types.INTEGER);
+                }
+                ps.setString(4, testo.trim());
+                ps.executeUpdate();
+                ps.close();
+            } catch (Exception e) {
+                errorMsg = "Errore nell'inserimento del commento.";
+            } finally {
+                if (connPost != null) { try { connPost.close(); } catch (Exception ignore) {} }
             }
         }
-        rs.close(); ps.close();
-        conn.close();
-    } catch (Exception ex) {
-        response.sendRedirect("home.jsp");
+        // Reindirizza alla pagina con ancora #commenti in vista
+        response.sendRedirect("dettaglio_ricetta.jsp?id=" + idRicetta + "#commenti");
         return;
     }
 
-    double media = ricetta.get("media_stelle") != null ? ((Number) ricetta.get("media_stelle")).doubleValue() : 0;
-    int voti = ricetta.get("num_voti") != null ? ((Number) ricetta.get("num_voti")).intValue() : 0;
-    boolean isAutore = idUtenteLoggato != null && idUtenteLoggato.intValue() == ((Number) ricetta.get("autore_id")).intValue();
-    String immagineUrl = UrlUtils.resolve(ctx, ricetta.get("immagine_url") != null ? (String) ricetta.get("immagine_url") : "");
+    // --------------------------------------------------------
+    // CARICAMENTO DATI RICETTA
+    // --------------------------------------------------------
+
+    // Dati base della ricetta
+    String  rTitolo        = "";
+    String  rDescrizione   = "";
+    String  rCategoria     = "";
+    String  rDifficolta    = "";
+    int     rTempoPrep     = 0;
+    int     rTempoCottura  = 0;
+    int     rPorzioni      = 0;
+    String  rImmagineUrl   = "";
+    boolean rPubblicata    = true;
+    int     rIdAutore      = 0;
+    String  rNomeAutore    = "";
+    String  rUsernameAutore= "";
+    String  rAvatarAutore  = "";
+    int     rNumLike       = 0;
+    boolean rLikedDaMe     = false;
+    boolean rSalvataDaMe   = false;
+
+    // Array per ingredienti, passaggi, commenti
+    Ingrediente[]  ingredienti = new Ingrediente[0];
+    Passaggio[]    passaggi    = new Passaggio[0];
+    Commento[]     commenti    = new Commento[0];
+
+    Connection conn = null;
+    try {
+        conn = Db.getConnection();
+
+        // ---- Dati base della ricetta ----
+        PreparedStatement psR = conn.prepareStatement(
+            "SELECT r.titolo, r.descrizione, r.categoria, r.difficolta, " +
+            "       r.tempo_preparazione_min, r.tempo_cottura_min, r.porzioni, " +
+            "       r.immagine_url, r.pubblicata, " +
+            "       u.id_utente AS id_autore, u.nome_visualizzato, u.username, u.avatar_url, " +
+            "       COUNT(DISTINCT mp.id_like) AS num_like, " +
+            "       SUM(CASE WHEN mp.id_utente = ? THEN 1 ELSE 0 END) AS liked, " +
+            "       SUM(CASE WHEN rs.id_utente  = ? THEN 1 ELSE 0 END) AS salvata " +
+            "FROM Ricetta r " +
+            "JOIN Utente u ON r.id_utente = u.id_utente " +
+            "LEFT JOIN MiPiace mp ON r.id_ricetta = mp.id_ricetta " +
+            "LEFT JOIN RicettaSalvata rs ON r.id_ricetta = rs.id_ricetta " +
+            "WHERE r.id_ricetta = ? " +
+            "GROUP BY r.id_ricetta, u.id_utente"
+        );
+        psR.setInt(1, idUtenteLoggato);
+        psR.setInt(2, idUtenteLoggato);
+        psR.setInt(3, idRicetta);
+        ResultSet rsR = psR.executeQuery();
+
+        if (!rsR.next()) {
+            rsR.close(); psR.close(); conn.close();
+            response.sendRedirect("home.jsp"); // Ricetta non trovata
+            return;
+        }
+
+        rTitolo         = rsR.getString("titolo");
+        rDescrizione    = rsR.getString("descrizione");
+        rCategoria      = rsR.getString("categoria");
+        rDifficolta     = rsR.getString("difficolta");
+        rTempoPrep      = rsR.getInt("tempo_preparazione_min");
+        rTempoCottura   = rsR.getInt("tempo_cottura_min");
+        rPorzioni       = rsR.getInt("porzioni");
+        rImmagineUrl    = UrlUtils.risolvi(ctx, rsR.getString("immagine_url"));
+        rPubblicata     = rsR.getBoolean("pubblicata");
+        rIdAutore       = rsR.getInt("id_autore");
+        rNomeAutore     = rsR.getString("nome_visualizzato");
+        rUsernameAutore = rsR.getString("username");
+        rAvatarAutore   = UrlUtils.risolvi(ctx, rsR.getString("avatar_url"));
+        rNumLike        = rsR.getInt("num_like");
+        rLikedDaMe      = rsR.getInt("liked")   > 0;
+        rSalvataDaMe    = rsR.getInt("salvata")  > 0;
+        rsR.close(); psR.close();
+
+        // ---- Carica ingredienti: prima conta, poi riempie l'array ----
+        PreparedStatement psIC = conn.prepareStatement(
+            "SELECT COUNT(*) FROM RicettaIngrediente WHERE id_ricetta = ?"
+        );
+        psIC.setInt(1, idRicetta);
+        ResultSet rsIC = psIC.executeQuery();
+        int numIng = 0;
+        if (rsIC.next()) { numIng = rsIC.getInt(1); }
+        rsIC.close(); psIC.close();
+
+        ingredienti = new Ingrediente[numIng];
+        PreparedStatement psIng = conn.prepareStatement(
+            "SELECT i.nome, ri.quantita, ri.unita_misura " +
+            "FROM RicettaIngrediente ri " +
+            "JOIN Ingrediente i ON ri.id_ingrediente = i.id_ingrediente " +
+            "WHERE ri.id_ricetta = ? ORDER BY ri.ordine_visualizzazione"
+        );
+        psIng.setInt(1, idRicetta);
+        ResultSet rsIng = psIng.executeQuery();
+        int ii = 0;
+        while (rsIng.next() && ii < ingredienti.length) {
+            Ingrediente ing = new Ingrediente();
+            ing.setNome(rsIng.getString("nome"));
+            ing.setQuantita(rsIng.getString("quantita"));
+            ing.setUnitaMisura(rsIng.getString("unita_misura"));
+            ingredienti[ii] = ing;
+            ii++;
+        }
+        rsIng.close(); psIng.close();
+
+        // ---- Carica passaggi ----
+        PreparedStatement psPC = conn.prepareStatement(
+            "SELECT COUNT(*) FROM RicettaPassaggio WHERE id_ricetta = ?"
+        );
+        psPC.setInt(1, idRicetta);
+        ResultSet rsPC = psPC.executeQuery();
+        int numPass = 0;
+        if (rsPC.next()) { numPass = rsPC.getInt(1); }
+        rsPC.close(); psPC.close();
+
+        passaggi = new Passaggio[numPass];
+        PreparedStatement psPass = conn.prepareStatement(
+            "SELECT numero_passaggio, descrizione FROM RicettaPassaggio " +
+            "WHERE id_ricetta = ? ORDER BY numero_passaggio"
+        );
+        psPass.setInt(1, idRicetta);
+        ResultSet rsPass = psPass.executeQuery();
+        int ip = 0;
+        while (rsPass.next() && ip < passaggi.length) {
+            Passaggio p = new Passaggio();
+            p.setOrdine(rsPass.getInt("numero_passaggio"));
+            p.setDescrizione(rsPass.getString("descrizione"));
+            passaggi[ip] = p;
+            ip++;
+        }
+        rsPass.close(); psPass.close();
+
+        // ---- Carica commenti (tutti: principali + risposte) ----
+        PreparedStatement psCC = conn.prepareStatement(
+            "SELECT COUNT(*) FROM Commento WHERE id_ricetta = ?"
+        );
+        psCC.setInt(1, idRicetta);
+        ResultSet rsCC = psCC.executeQuery();
+        int numCom = 0;
+        if (rsCC.next()) { numCom = rsCC.getInt(1); }
+        rsCC.close(); psCC.close();
+
+        commenti = new Commento[numCom];
+        PreparedStatement psCom = conn.prepareStatement(
+            "SELECT c.id_commento, COALESCE(c.id_parent, 0) AS id_parent, " +
+            "       c.id_utente, c.testo, c.creato_il, " +
+            "       u.nome_visualizzato, u.username, u.avatar_url " +
+            "FROM Commento c " +
+            "JOIN Utente u ON c.id_utente = u.id_utente " +
+            "WHERE c.id_ricetta = ? " +
+            "ORDER BY c.creato_il ASC"
+        );
+        psCom.setInt(1, idRicetta);
+        ResultSet rsCom = psCom.executeQuery();
+        int ic = 0;
+        while (rsCom.next() && ic < commenti.length) {
+            Commento c = new Commento();
+            c.setIdCommento(rsCom.getInt("id_commento"));
+            c.setIdParent(rsCom.getInt("id_parent")); // 0 se è principale
+            c.setIdUtente(rsCom.getInt("id_utente"));
+            c.setNomeUtente(rsCom.getString("nome_visualizzato"));
+            c.setUsername(rsCom.getString("username"));
+            c.setAvatarUrl(UrlUtils.risolvi(ctx, rsCom.getString("avatar_url")));
+            c.setTesto(rsCom.getString("testo"));
+            c.setData(rsCom.getTimestamp("creato_il"));
+            commenti[ic] = c;
+            ic++;
+        }
+        rsCom.close(); psCom.close();
+
+    } catch (Exception e) {
+        errorMsg = "Errore nel caricamento della ricetta.";
+    } finally {
+        if (conn != null) { try { conn.close(); } catch (Exception ignore) {} }
+    }
+
+    // True se l'utente loggato è l'autore della ricetta
+    boolean isMioAutore = (rIdAutore == idUtenteLoggato);
 %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= esc((String) ricetta.get("titolo")) %> - BakingBread</title>
+    <title><%= rTitolo %> - BakingBread</title>
     <link rel="stylesheet" href="<%= ctx %>/css/global.css">
     <link rel="stylesheet" href="<%= ctx %>/css/recipe.css">
-    <link rel="stylesheet" href="<%= ctx %>/css/messages.css">
     <link rel="icon" href="<%= ctx %>/media/favicon.svg">
 </head>
 <body>
     <jsp:include page="navbar.jsp" />
-    <main class="container recipe-detail-page animate-entrance">
-        <section class="recipe-hero card">
-            <div class="recipe-hero-media"><img src="<%= esc(immagineUrl == null || immagineUrl.trim().isEmpty() ? ctx + "/media/favicon.svg" : immagineUrl) %>" alt="<%= esc((String) ricetta.get("titolo")) %>" class="recipe-hero-img"></div>
-            <div class="recipe-hero-content">
-                <p class="eyebrow"><%= esc((String) ricetta.get("categoria")) %></p>
-                <h1><%= esc((String) ricetta.get("titolo")) %></h1>
-                <p class="recipe-description"><%= esc((String) ricetta.get("descrizione")) %></p>
-                <div class="author-line">
-                    <a href="profile.jsp?id=<%= ricetta.get("autore_id") %>" class="author-link">
-                        <% if (autoreAvatar != null && !autoreAvatar.trim().isEmpty()) { %><img src="<%= esc(autoreAvatar) %>" alt="Autore" class="author-avatar"><% } else { %><span class="author-avatar author-avatar-fallback"><%= esc(autoreNome != null && !autoreNome.isEmpty() ? autoreNome.substring(0,1) : "U") %></span><% } %>
-                        <span><strong><%= esc(autoreNome) %></strong><small>@<%= esc(autoreUsername) %></small></span>
-                    </a>
-                    <% if (isAutore) { %><a href="crea_ricetta.jsp?modifica=<%= idRicetta %>" class="btn-outline">Modifica</a><% } %>
+
+    <main class="container page-narrow" style="padding:28px 0 56px;">
+
+        <% if (!errorMsg.isEmpty()) { %>
+            <div class="alert alert-error"><%= errorMsg %></div>
+        <% } %>
+
+        <%-- ===== INTESTAZIONE RICETTA ===== --%>
+        <div class="recipe-detail-header">
+
+            <% if (rImmagineUrl != null && !rImmagineUrl.isEmpty()) { %>
+                <div class="recipe-detail-image">
+                    <img src="<%= rImmagineUrl %>" alt="<%= rTitolo %>">
                 </div>
-                <div class="recipe-meta-grid">
-                    <div class="meta-chip">Prep: <strong><%= ricetta.get("tempo_preparazione_min") != null ? ricetta.get("tempo_preparazione_min") : "-" %> min</strong></div>
-                    <div class="meta-chip">Cottura: <strong><%= ricetta.get("tempo_cottura_min") != null ? ricetta.get("tempo_cottura_min") : "-" %> min</strong></div>
-                    <div class="meta-chip">Porzioni: <strong><%= ricetta.get("porzioni") != null ? ricetta.get("porzioni") : "-" %></strong></div>
-                    <div class="meta-chip">Difficoltà: <strong><%= esc((String) ricetta.get("difficolta")) %></strong></div>
-                    <div class="meta-chip">Rating: <strong><%= String.format(java.util.Locale.US, "%.1f", media) %></strong> (<%= voti %>)</div>
+            <% } %>
+
+            <div class="recipe-detail-meta">
+                <% if (rCategoria != null && !rCategoria.isEmpty()) { %>
+                    <span class="badge badge-secondary"><%= rCategoria %></span>
+                <% } %>
+                <h1><%= rTitolo %></h1>
+                <% if (rDescrizione != null && !rDescrizione.isEmpty()) { %>
+                    <p class="text-muted"><%= rDescrizione %></p>
+                <% } %>
+
+                <%-- Autore --%>
+                <div class="recipe-detail-author">
+                    <a href="profile.jsp?id=<%= rIdAutore %>" class="author-link">
+                        <% if (rAvatarAutore != null && !rAvatarAutore.isEmpty()) { %>
+                            <img src="<%= rAvatarAutore %>" alt="Avatar" class="avatar-xs">
+                        <% } %>
+                        <div>
+                            <strong><%= rNomeAutore %></strong>
+                            <br><small class="text-muted">@<%= rUsernameAutore %></small>
+                        </div>
+                    </a>
+                    <% if (isMioAutore) { %>
+                        <a href="crea_ricetta.jsp?modifica=<%= idRicetta %>"
+                           class="btn-secondary btn-sm">✏ Modifica</a>
+                    <% } %>
+                </div>
+
+                <%-- Info rapide: tempo, difficoltà, porzioni --%>
+                <div class="recipe-quick-stats">
+                    <% if (rTempoPrep > 0) { %>
+                        <div class="stat-item"><strong><%= rTempoPrep %>'</strong><span>Prep.</span></div>
+                    <% } %>
+                    <% if (rTempoCottura > 0) { %>
+                        <div class="stat-item"><strong><%= rTempoCottura %>'</strong><span>Cottura</span></div>
+                    <% } %>
+                    <% if (rPorzioni > 0) { %>
+                        <div class="stat-item"><strong><%= rPorzioni %></strong><span>Porzioni</span></div>
+                    <% } %>
+                    <% if (rDifficolta != null && !rDifficolta.isEmpty()) { %>
+                        <div class="stat-item">
+                            <strong><%= rDifficolta.substring(0,1).toUpperCase() + rDifficolta.substring(1) %></strong>
+                            <span>Difficoltà</span>
+                        </div>
+                    <% } %>
+                </div>
+
+                <%-- Azioni: like e salva --%>
+                <div class="recipe-actions">
+                    <% if (rLikedDaMe) { %>
+                        <a href="home.jsp?azione=mi piace&tipo=rimuovi&id=<%= idRicetta %>" class="action-btn active">
+                            ❤ <%= rNumLike %> Mi piace
+                        </a>
+                    <% } else { %>
+                        <a href="home.jsp?azione=mi piace&tipo=aggiungi&id=<%= idRicetta %>" class="action-btn">
+                            🤍 <%= rNumLike %> Mi piace
+                        </a>
+                    <% } %>
+
+                    <% if (rSalvataDaMe) { %>
+                        <a href="home.jsp?azione=salva&tipo=rimuovi&id=<%= idRicetta %>" class="action-btn active">
+                            🔖 Salvata
+                        </a>
+                    <% } else { %>
+                        <a href="home.jsp?azione=salva&tipo=aggiungi&id=<%= idRicetta %>" class="action-btn">
+                            📌 Salva
+                        </a>
+                    <% } %>
                 </div>
             </div>
-        </section>
-        <section class="recipe-content-grid">
-            <article class="card recipe-section">
-                <div class="section-head compact"><div><p class="eyebrow">Ingredienti</p><h2>Lista ingredienti</h2></div></div>
-                <div class="ingredient-list">
-                    <% for (Ingredient ing : ingredienti) { %><div class="ingredient-item"><span><%= esc(ing.nome) %></span><span><%= esc(ing.quantita) %> <%= esc(ing.unita) %></span></div><% } %>
-                    <% if (ingredienti.isEmpty()) { %><p class="empty-state">Nessun ingrediente inserito.</p><% } %>
-                </div>
-            </article>
-            <article class="card recipe-section">
-                <div class="section-head compact"><div><p class="eyebrow">Procedimento</p><h2>Passaggi</h2></div></div>
-                <div class="step-list">
-                    <% for (Step step : passi) { %><div class="step-item"><span class="step-number"><%= step.ordine %></span><p><%= esc(step.descrizione) %></p></div><% } %>
-                    <% if (passi.isEmpty()) { %><p class="empty-state">Nessun passaggio inserito.</p><% } %>
-                </div>
-            </article>
-        </section>
-        <section class="card comments-section" id="commenti">
-            <div class="section-head compact"><div><p class="eyebrow">Commenti</p><h2><%= totaleCommenti %> commenti</h2></div></div>
-            <form action="<%= ctx %>/recipe/comment" method="post" class="comment-form">
-                <input type="hidden" name="id_ricetta" value="<%= idRicetta %>">
-                <textarea name="testo" rows="3" placeholder="Scrivi un commento..." required></textarea>
-                <button type="submit" class="btn-primary">Pubblica commento</button>
+        </div>
+
+        <%-- ===== INGREDIENTI ===== --%>
+        <% if (ingredienti.length > 0) { %>
+            <div class="card" style="padding:28px; margin-bottom:24px;">
+                <h2>Ingredienti</h2>
+                <ul class="ingredients-list">
+                    <% for (int i = 0; i < ingredienti.length; i++) { %>
+                        <li>
+                            <% if (ingredienti[i].getQuantita() != null && !ingredienti[i].getQuantita().isEmpty()) { %>
+                                <span class="ingredient-qty">
+                                    <%= ingredienti[i].getQuantita() %>
+                                    <% if (ingredienti[i].getUnitaMisura() != null && !ingredienti[i].getUnitaMisura().isEmpty()) { %>
+                                        <%= ingredienti[i].getUnitaMisura() %>
+                                    <% } %>
+                                </span>
+                            <% } %>
+                            <span class="ingredient-name"><%= ingredienti[i].getNome() %></span>
+                        </li>
+                    <% } %>
+                </ul>
+            </div>
+        <% } %>
+
+        <%-- ===== PASSAGGI ===== --%>
+        <% if (passaggi.length > 0) { %>
+            <div class="card" style="padding:28px; margin-bottom:24px;">
+                <h2>Preparazione</h2>
+                <ol class="steps-list">
+                    <% for (int i = 0; i < passaggi.length; i++) { %>
+                        <li>
+                            <div class="step-number-badge"><%= passaggi[i].getOrdine() %></div>
+                            <p><%= passaggi[i].getDescrizione() %></p>
+                        </li>
+                    <% } %>
+                </ol>
+            </div>
+        <% } %>
+
+        <%-- ===== COMMENTI ===== --%>
+        <div class="card" id="commenti" style="padding:28px;">
+            <h2>Commenti (<%= commenti.length %>)</h2>
+
+            <%-- Form per scrivere un nuovo commento principale --%>
+            <form method="POST" action="dettaglio_ricetta.jsp?id=<%= idRicetta %>"
+                  class="comment-form" style="margin-bottom:28px;">
+                <input type="hidden" name="id_parent" value="0">
+                <textarea name="testo" rows="3"
+                          placeholder="Scrivi un commento..."
+                          required maxlength="2000"></textarea>
+                <button type="submit" class="btn-primary btn-sm">Invia commento</button>
             </form>
-            <div class="comment-list">
-                <% if (topComments.isEmpty()) { %><p class="empty-state">Ancora nessun commento. Scrivi il primo.</p><% } %>
-                <% for (Comment c : topComments) { %>
-                    <div class="comment-card">
-                        <div class="comment-top">
-                            <% if (c.avatar != null && !c.avatar.trim().isEmpty()) { %><img src="<%= esc(c.avatar) %>" alt="Avatar" class="comment-avatar"><% } else { %><span class="comment-avatar comment-avatar-fallback"><%= esc(c.nome != null && !c.nome.isEmpty() ? c.nome.substring(0,1) : "U") %></span><% } %>
-                            <div><strong><%= esc(c.nome) %></strong><small>@<%= esc(c.username) %> · <%= c.data != null ? c.data.toString().substring(0, 16) : "" %></small></div>
-                        </div>
-                        <p><%= esc(c.testo) %></p>
-                        <% List<Comment> child = replies.get(c.id); if (child != null && !child.isEmpty()) { %>
-                            <div class="comment-replies">
-                                <% for (Comment r : child) { %>
-                                    <div class="comment-reply">
-                                        <div class="comment-top comment-top-small">
-                                            <% if (r.avatar != null && !r.avatar.trim().isEmpty()) { %><img src="<%= esc(r.avatar) %>" alt="Avatar" class="comment-avatar comment-avatar-small"><% } else { %><span class="comment-avatar comment-avatar-small comment-avatar-fallback"><%= esc(r.nome != null && !r.nome.isEmpty() ? r.nome.substring(0,1) : "U") %></span><% } %>
-                                            <div><strong><%= esc(r.nome) %></strong><small>@<%= esc(r.username) %> · <%= r.data != null ? r.data.toString().substring(0, 16) : "" %></small></div>
-                                        </div>
-                                        <p><%= esc(r.testo) %></p>
-                                    </div>
+
+            <%--
+                Ciclo dei commenti:
+                Prima mostra i commenti principali (idParent == 0),
+                poi per ognuno cerca le risposte nel STESSO array.
+                Questo evita di usare ArrayList annidati.
+            --%>
+            <% for (int i = 0; i < commenti.length; i++) { %>
+                <% if (commenti[i].getIdParent() == 0) { %> <%-- Commento principale --%>
+                    <div class="comment">
+                        <%-- Avatar autore commento --%>
+                        <a href="profile.jsp?id=<%= commenti[i].getIdUtente() %>">
+                            <% if (commenti[i].getAvatarUrl() != null && !commenti[i].getAvatarUrl().isEmpty()) { %>
+                                <img src="<%= commenti[i].getAvatarUrl() %>"
+                                     alt="Avatar" class="avatar-sm">
+                            <% } else { %>
+                                <span class="avatar-sm avatar-fallback">
+                                    <%= commenti[i].getNomeUtente().substring(0,1).toUpperCase() %>
+                                </span>
+                            <% } %>
+                        </a>
+
+                        <div class="comment-body">
+                            <div class="comment-header">
+                                <a href="profile.jsp?id=<%= commenti[i].getIdUtente() %>">
+                                    <strong><%= commenti[i].getNomeUtente() %></strong>
+                                </a>
+                                <% if (commenti[i].getData() != null) { %>
+                                    <small class="text-muted">
+                                        <%= commenti[i].getData().toString().substring(0, 16) %>
+                                    </small>
                                 <% } %>
                             </div>
-                        <% } %>
+                            <p><%= commenti[i].getTesto() %></p>
+
+                            <%-- Pulsante "Rispondi": mostra/nasconde il form risposta --%>
+                            <button type="button"
+                                    class="action-btn"
+                                    onclick="toggleRispostaForm('reply_<%= commenti[i].getIdCommento() %>')">
+                                💬 Rispondi
+                            </button>
+
+                            <%-- Form di risposta (nascosto, si mostra al click) --%>
+                            <div id="reply_<%= commenti[i].getIdCommento() %>"
+                                 style="display:none; margin-top:12px;">
+                                <form method="POST"
+                                      action="dettaglio_ricetta.jsp?id=<%= idRicetta %>">
+                                    <input type="hidden" name="id_parent"
+                                           value="<%= commenti[i].getIdCommento() %>">
+                                    <textarea name="testo" rows="2"
+                                              placeholder="Scrivi una risposta..."
+                                              required maxlength="2000"></textarea>
+                                    <button type="submit" class="btn-primary btn-sm">
+                                        Invia risposta
+                                    </button>
+                                </form>
+                            </div>
+
+                            <%--
+                                Cerca le risposte a questo commento scorrendo
+                                tutto l'array dei commenti: O(n²) ma funziona
+                                senza strutture dati complesse.
+                            --%>
+                            <% for (int j = 0; j < commenti.length; j++) { %>
+                                <% if (commenti[j].getIdParent() == commenti[i].getIdCommento()) { %>
+                                    <div class="comment comment-reply">
+                                        <a href="profile.jsp?id=<%= commenti[j].getIdUtente() %>">
+                                            <% if (commenti[j].getAvatarUrl() != null && !commenti[j].getAvatarUrl().isEmpty()) { %>
+                                                <img src="<%= commenti[j].getAvatarUrl() %>"
+                                                     alt="Avatar" class="avatar-xs">
+                                            <% } else { %>
+                                                <span class="avatar-xs avatar-fallback">
+                                                    <%= commenti[j].getNomeUtente().substring(0,1).toUpperCase() %>
+                                                </span>
+                                            <% } %>
+                                        </a>
+                                        <div class="comment-body">
+                                            <div class="comment-header">
+                                                <a href="profile.jsp?id=<%= commenti[j].getIdUtente() %>">
+                                                    <strong><%= commenti[j].getNomeUtente() %></strong>
+                                                </a>
+                                                <% if (commenti[j].getData() != null) { %>
+                                                    <small class="text-muted">
+                                                        <%= commenti[j].getData().toString().substring(0, 16) %>
+                                                    </small>
+                                                <% } %>
+                                            </div>
+                                            <p><%= commenti[j].getTesto() %></p>
+                                        </div>
+                                    </div>
+                                <% } %> <%-- fine if risposta --%>
+                            <% } %> <%-- fine ciclo risposte --%>
+
+                        </div>
                     </div>
-                <% } %>
-            </div>
-        </section>
+                <% } %> <%-- fine if commento principale --%>
+            <% } %> <%-- fine ciclo commenti --%>
+
+            <% if (commenti.length == 0) { %>
+                <p class="text-muted" style="text-align:center; padding:20px 0;">
+                    Nessun commento ancora. Sii il primo!
+                </p>
+            <% } %>
+        </div>
+
     </main>
-    <script src="<%= ctx %>/js/main.js"></script>
+
+    <script>
+        // Mostra o nasconde il form di risposta ad un commento
+        function toggleRispostaForm(id) {
+            var div = document.getElementById(id); // Trova il div per ID
+            if (div.style.display === "none") {
+                div.style.display = "block"; // Mostra il form
+            } else {
+                div.style.display = "none"; // Nasconde il form
+            }
+        }
+    </script>
 </body>
 </html>

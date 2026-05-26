@@ -1,41 +1,139 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ============================================================
+    FILE: web.xml
+    SCOPO: File di configurazione dell'applicazione web Java EE.
+    Definisce:
+    - Il servlet JSP (con supporto multipart per upload file)
+    - La mappatura degli URL
+    - La pagina di benvenuto (index)
+    - Le pagine di errore per 404 e 500
+    ============================================================
+-->
 <web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee 
-                             http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-         version="3.1">
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+                             http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+         version="4.0">
+
+    <!-- Nome dell'applicazione -->
     <display-name>BakingBread</display-name>
-    <welcome-file-list><welcome-file>home.jsp</welcome-file></welcome-file-list>
+    <description>Piattaforma di condivisione ricette di cucina.</description>
+
+    <!--
+        Configurazione del Servlet JSP predefinito di Tomcat.
+        Aggiungere <multipart-config> al servlet JSP è necessario
+        affinché le pagine JSP possano ricevere file tramite form
+        con enctype="multipart/form-data" (upload immagini).
+        Senza questa configurazione, request.getPart() lancerebbe
+        un'eccezione nelle pagine JSP.
+    -->
     <servlet>
+        <!-- Nome interno del servlet (deve corrispondere alla mappatura) -->
         <servlet-name>jsp</servlet-name>
+        <!-- Classe del servlet JSP di Apache Jasper (incluso in Tomcat) -->
         <servlet-class>org.apache.jasper.servlet.JspServlet</servlet-class>
-        <init-param><param-name>fork</param-name><param-value>false</param-value></init-param>
-        <init-param><param-name>xpoweredBy</param-name><param-value>false</param-value></init-param>
+
+        <!-- Parametri di configurazione di Jasper -->
+        <init-param>
+            <!-- Attiva la ricompilazione automatica quando il JSP cambia -->
+            <param-name>development</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <init-param>
+            <!-- Forza la codifica UTF-8 per tutti i JSP -->
+            <param-name>javaEncoding</param-name>
+            <param-value>UTF-8</param-value>
+        </init-param>
+
+        <!--
+            CONFIGURAZIONE MULTIPART: abilita request.getPart() nei JSP.
+            Senza questo blocco, i file caricati via form non sarebbero
+            accessibili nelle pagine JSP.
+        -->
+        <multipart-config>
+            <!-- Dimensione massima di un singolo file: 8 MB -->
+            <max-file-size>8388608</max-file-size>
+            <!-- Dimensione massima totale della richiesta: 20 MB -->
+            <max-request-size>20971520</max-request-size>
+            <!-- Soglia oltre la quale il file viene scritto su disco: 0 = sempre -->
+            <file-size-threshold>0</file-size-threshold>
+        </multipart-config>
+
+        <!-- Caricamento al primo avvio dell'applicazione -->
         <load-on-startup>3</load-on-startup>
     </servlet>
-    <servlet-mapping><servlet-name>jsp</servlet-name><url-pattern>*.jsp</url-pattern></servlet-mapping>
-    <servlet-mapping><servlet-name>jsp</servlet-name><url-pattern>*.jspx</url-pattern></servlet-mapping>
-    <session-config><session-timeout>30</session-timeout></session-config>
-    <error-page><error-code>404</error-code><location>/home.jsp</location></error-page>
-    <error-page><error-code>500</error-code><location>/home.jsp</location></error-page>
+
+    <!-- Mappatura: tutti i file .jsp vengono gestiti dal servlet jsp -->
+    <servlet-mapping>
+        <servlet-name>jsp</servlet-name>
+        <url-pattern>*.jsp</url-pattern>
+    </servlet-mapping>
+
+    <!--
+        Servlet predefinito per i file statici (CSS, JS, immagini).
+        Già presente in Tomcat, ma ridichiariamo la mappatura
+        per i file statici nella cartella /uploads/.
+    -->
     <servlet>
-        <servlet-name>RecipeSaveServlet</servlet-name>
-        <servlet-class>com.bakingbread.web.RecipeSaveServlet</servlet-class>
+        <servlet-name>default</servlet-name>
+        <servlet-class>org.apache.catalina.servlets.DefaultServlet</servlet-class>
+        <init-param>
+            <param-name>debug</param-name>
+            <param-value>0</param-value>
+        </init-param>
+        <init-param>
+            <!-- Abilita le richieste di tipo "Range" (streaming) -->
+            <param-name>readonly</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <load-on-startup>1</load-on-startup>
     </servlet>
-    <servlet-mapping><servlet-name>RecipeSaveServlet</servlet-name><url-pattern>/recipe/save</url-pattern></servlet-mapping>
-    <servlet>
-        <servlet-name>ProfileUpdateServlet</servlet-name>
-        <servlet-class>com.bakingbread.web.ProfileUpdateServlet</servlet-class>
-    </servlet>
-    <servlet-mapping><servlet-name>ProfileUpdateServlet</servlet-name><url-pattern>/profile/update</url-pattern></servlet-mapping>
-    <servlet>
-        <servlet-name>CommentServlet</servlet-name>
-        <servlet-class>com.bakingbread.web.CommentServlet</servlet-class>
-    </servlet>
-    <servlet-mapping><servlet-name>CommentServlet</servlet-name><url-pattern>/recipe/comment</url-pattern></servlet-mapping>
-    <servlet>
-        <servlet-name>FollowServlet</servlet-name>
-        <servlet-class>com.bakingbread.web.FollowServlet</servlet-class>
-    </servlet>
-    <servlet-mapping><servlet-name>FollowServlet</servlet-name><url-pattern>/profile/follow</url-pattern></servlet-mapping>
+
+    <!-- Mappatura del servlet per i file statici -->
+    <servlet-mapping>
+        <servlet-name>default</servlet-name>
+        <url-pattern>/</url-pattern>
+    </servlet-mapping>
+
+    <!--
+        Pagine di benvenuto: quando l'utente visita la radice "/"
+        dell'applicazione, viene reindirizzato a login.jsp.
+    -->
+    <welcome-file-list>
+        <welcome-file>login.jsp</welcome-file>
+        <welcome-file>home.jsp</welcome-file>
+    </welcome-file-list>
+
+    <!-- Codifica predefinita per tutte le richieste -->
+    <request-character-encoding>UTF-8</request-character-encoding>
+
+    <!-- Codifica predefinita per tutte le risposte -->
+    <response-character-encoding>UTF-8</response-character-encoding>
+
+    <!--
+        Durata della sessione: l'utente viene disconnesso automaticamente
+        dopo 60 minuti di inattività.
+    -->
+    <session-config>
+        <session-timeout>60</session-timeout>
+    </session-config>
+
+    <!--
+        Pagine di errore personalizzate.
+        Se si verifica un errore HTTP 404 (pagina non trovata)
+        o 500 (errore interno del server), viene mostrata
+        la pagina di login invece del messaggio di errore di Tomcat.
+    -->
+    <error-page>
+        <!-- 404: risorsa non trovata -->
+        <error-code>404</error-code>
+        <location>/login.jsp</location>
+    </error-page>
+    <error-page>
+        <!-- 500: errore interno del server -->
+        <error-code>500</error-code>
+        <location>/login.jsp</location>
+    </error-page>
+
 </web-app>

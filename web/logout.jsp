@@ -1,43 +1,24 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*" %>
+<%--
+    ============================================================
+    FILE: logout.jsp
+    SCOPO: Disconnette l'utente eliminando la sua sessione.
+    - Invalida la sessione (cancella tutti i dati di sessione)
+    - Reindirizza immediatamente alla pagina di login
+    Non mostra nessuna HTML: è una pagina puramente "di azione".
+    ============================================================
+--%>
 <%
-    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    response.setHeader("Pragma", "no-cache");
-    response.setDateHeader("Expires", 0);
+    // Recupera la sessione corrente SENZA crearne una nuova
+    // (false = non creare sessione se non esiste già)
+    javax.servlet.http.HttpSession sessione = request.getSession(false);
 
-    Integer idUtente = (Integer) session.getAttribute("id_utente");
-    
-    if (idUtente != null) {
-        try {
-            Cookie[] cookies = request.getCookies();
-            if (cookies != null) {
-                for (Cookie c : cookies) {
-                    if ("remember_token".equals(c.getName())) {
-                        String token = c.getValue();
-                        Class.forName("com.mysql.cj.jdbc.Driver");
-                        java.sql.Connection conn = DriverManager.getConnection(
-                            "jdbc:mysql://localhost:3306/bakingbread?useSSL=false", "root", "");
-                        PreparedStatement ps = conn.prepareStatement(
-                            "DELETE FROM SessioneToken WHERE id_utente = ? AND token = ?");
-                        ps.setInt(1, idUtente);
-                        ps.setString(2, token);
-                        ps.executeUpdate();
-                        ps.close();
-                        conn.close();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // ignora errori durante logout
-        }
+    // Se esiste una sessione attiva, la distrugge completamente
+    // Questo cancella tutti gli attributi (id_utente, username, ecc.)
+    if (sessione != null) {
+        sessione.invalidate(); // Invalida la sessione: l'utente non è più loggato
     }
-    
-    Cookie rememberCookie = new Cookie("remember_token", "");
-    rememberCookie.setMaxAge(0);
-    rememberCookie.setPath("/");
-    rememberCookie.setHttpOnly(true);
-    response.addCookie(rememberCookie);
-    
-    session.invalidate();
+
+    // Reindirizza il browser alla pagina di login
     response.sendRedirect("login.jsp");
 %>

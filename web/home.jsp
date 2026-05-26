@@ -1,65 +1,269 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
-<%@ page import="java.sql.*, java.net.*, com.bakingbread.util.UrlUtils" %>
+<%@ page import="java.sql.*" %>
+<%@ page import="com.bakingbread.util.*" %>
+<%@ page import="com.bakingbread.model.*" %>
+<%--
+    ============================================================
+    FILE: home.jsp
+    SCOPO: Mostra il feed principale con le ricette pubblicate.
+    - Controlla che l'utente sia loggato
+    - Gestisce le azioni "mi piace" e "salva" via parametri GET
+    - Carica le ricette dal DB in un array RicettaCard[]
+    - Supporta ricerca per titolo tramite parametro "cerca"
+    ============================================================
+--%>
 <%
+    // Impedisce la cache del browser
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setDateHeader("Expires", 0);
 
+    // Recupera il contextPath per costruire URL corretti
     String ctx = request.getContextPath();
+
+    // Legge l'ID dell'utente dalla sessione
     Integer idUtenteLoggato = (Integer) session.getAttribute("id_utente");
-    String azione = request.getParameter("azione");
-    String tipo = request.getParameter("tipo");
-    int idTarget = 0;
-    try { idTarget = Integer.parseInt(request.getParameter("id")); } catch (Exception e) {}
-    
-    if (idUtenteLoggato != null && azione != null && idTarget > 0) {
+
+    // Se non loggato, reindirizza al login
+    if (idUtenteLoggato == null) {
+        response.sendRedirect("login.jsp");
+        return;
+    }
+
+    // --------------------------------------------------------
+    // GESTIONE AZIONI (like e salva tramite link GET)
+    // L'utente clicca un pulsante che aggiunge ?azione=...&tipo=...&id=...
+    // Elaboriamo l'azione, poi reindirizziamo per evitare ricaricamenti
+    // --------------------------------------------------------
+    String azione = request.getParameter("azione"); // "mi piace" o "salva"
+    String tipo   = request.getParameter("tipo");   // "aggiungi" o "rimuovi"
+    int    idTarget = 0;
+    try {
+        idTarget = Integer.parseInt(request.getParameter("id")); // ID ricetta
+    } catch (Exception e) {
+        idTarget = 0; // Se il parametro manca o non è un numero, ignoriamo
+    }
+
+    // Esegue l'azione solo se tutti i parametri sono validi
+    if (azione != null && idTarget > 0) {
+        Connection connAzione = null;
         try {
-            Connection conn = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/bakingbread?useSSL=false", "root", "");
-            
+            connAzione = Db.getConnection();
+
             if ("mi piace".equals(azione)) {
+                // Gestione del "Mi piace"
                 if ("aggiungi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "INSERT IGNORE INTO MiPiace (id_ricetta, id_utente) VALUES (?, ?)");
+                    // INSERT IGNORE: se il like esiste già, non fa nulla
+                    PreparedStatement ps = connAzione.prepareStatement(
+                        "INSERT IGNORE INTO MiPiace (id_ricetta, id_utente) VALUES (?, ?)"
+                    );
                     ps.setInt(1, idTarget);
                     ps.setInt(2, idUtenteLoggato);
                     ps.executeUpdate();
                     ps.close();
+
                 } else if ("rimuovi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "DELETE FROM MiPiace WHERE id_ricetta = ? AND id_utente = ?");
+                    PreparedStatement ps = connAzione.prepareStatement(
+                        "DELETE FROM MiPiace WHERE id_ricetta = ? AND id_utente = ?"
+                    );
                     ps.setInt(1, idTarget);
                     ps.setInt(2, idUtenteLoggato);
                     ps.executeUpdate();
                     ps.close();
                 }
+
             } else if ("salva".equals(azione)) {
+                // Gestione del "Salva ricetta"
                 if ("aggiungi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "INSERT IGNORE INTO RicettaSalvata (id_utente, id_ricetta) VALUES (?, ?)");
+                    PreparedStatement ps = connAzione.prepareStatement(
+                        "INSERT IGNORE INTO RicettaSalvata (id_utente, id_ricetta) VALUES (?, ?)"
+                    );
                     ps.setInt(1, idUtenteLoggato);
                     ps.setInt(2, idTarget);
                     ps.executeUpdate();
                     ps.close();
+
                 } else if ("rimuovi".equals(tipo)) {
-                    PreparedStatement ps = conn.prepareStatement(
-                        "DELETE FROM RicettaSalvata WHERE id_utente = ? AND id_ricetta = ?");
+                    PreparedStatement ps = connAzione.prepareStatement(
+                        "DELETE FROM RicettaSalvata WHERE id_utente = ? AND id_ricetta = ?"
+                    );
                     ps.setInt(1, idUtenteLoggato);
                     ps.setInt(2, idTarget);
                     ps.executeUpdate();
                     ps.close();
                 }
             }
-            conn.close();
-            response.sendRedirect("home.jsp");
-            return;
+
         } catch (Exception e) {
-            // ignora errori
+            // In caso di errore ignoriamo e continuiamo a caricare la pagina
+        } finally {
+            if (connAzione != null) {
+                try { connAzione.close(); } catch (Exception ignore) {}
+            }
+        }
+
+        // Reindirizza per pulire i parametri dall'URL (pattern POST-REDIRECT-GET)
+        String cerca = request.getParameter("cerca");
+        if (cerca != null && !cerca.isEmpty()) {
+            response.sendRedirect("home.jsp?cerca=" + java.net.URLEncoder.encode(cerca, "UTF-8"));
+        } else {
+            response.sendRedirect("home.jsp");
+        }
+        return;
+    }
+
+    // --------------------------------------------------------
+    // CARICAMENTO RICETTE DAL DATABASE
+    // --------------------------------------------------------
+
+    // Legge il termine di ricerca (se l'utente ha cercato qualcosa)
+    String cerca = request.getParameter("cerca");
+    if (cerca == null) {
+        cerca = ""; // Se non c'è nessun parametro, cerca tutto
+    }
+    cerca = cerca.trim();
+
+    // Array che conterrà le ricette da mostrare
+    RicettaCard[] ricette = new RicettaCard[0]; // Array vuoto come valore di default
+
+    Connection conn = null;
+    try {
+        conn = Db.getConnection();
+
+        // ---- CONTA QUANTE RICETTE CI SONO ----
+        // Serve per creare l'array della dimensione giusta
+        int numRicette = 0;
+        PreparedStatement psCount;
+
+        if (cerca.isEmpty()) {
+            // Senza ricerca: conta tutte le ricette pubblicate
+            psCount = conn.prepareStatement(
+                "SELECT COUNT(*) FROM Ricetta WHERE pubblicata = TRUE"
+            );
+        } else {
+            // Con ricerca: conta solo quelle che contengono il testo cercato
+            psCount = conn.prepareStatement(
+                "SELECT COUNT(*) FROM Ricetta WHERE pubblicata = TRUE " +
+                "AND (titolo LIKE ? OR descrizione LIKE ?)"
+            );
+            String pattern = "%" + cerca + "%"; // % è il wildcard SQL per "qualsiasi testo"
+            psCount.setString(1, pattern);
+            psCount.setString(2, pattern);
+        }
+
+        ResultSet rsCount = psCount.executeQuery();
+        if (rsCount.next()) {
+            numRicette = rsCount.getInt(1); // Legge il numero totale
+        }
+        rsCount.close();
+        psCount.close();
+
+        // Limita a massimo 50 ricette per non sovraccaricare la pagina
+        if (numRicette > 50) {
+            numRicette = 50;
+        }
+
+        // Crea l'array della dimensione esatta
+        ricette = new RicettaCard[numRicette];
+
+        // ---- CARICA LE RICETTE CON TUTTI I DETTAGLI ----
+        PreparedStatement ps;
+
+        if (cerca.isEmpty()) {
+            // Query senza filtro di ricerca
+            // Usa GROUP BY per aggregare i conteggi (like, salvataggi)
+            ps = conn.prepareStatement(
+                "SELECT r.id_ricetta, r.titolo, r.descrizione, r.immagine_url, " +
+                "       r.categoria, r.tempo_preparazione_min, r.tempo_cottura_min, " +
+                "       r.difficolta, r.porzioni, " +
+                "       u.id_utente AS id_autore, u.nome_visualizzato AS nome_autore, " +
+                "       u.username AS username_autore, u.avatar_url AS avatar_autore, " +
+                "       COUNT(DISTINCT mp.id_like) AS num_like, " +
+                "       SUM(CASE WHEN mp.id_utente = ? THEN 1 ELSE 0 END) AS liked, " +
+                "       SUM(CASE WHEN rs.id_utente  = ? THEN 1 ELSE 0 END) AS salvata " +
+                "FROM Ricetta r " +
+                "JOIN Utente u ON r.id_utente = u.id_utente " +
+                "LEFT JOIN MiPiace mp ON r.id_ricetta = mp.id_ricetta " +
+                "LEFT JOIN RicettaSalvata rs ON r.id_ricetta = rs.id_ricetta " +
+                "WHERE r.pubblicata = TRUE " +
+                "GROUP BY r.id_ricetta, u.id_utente " +
+                "ORDER BY r.creato_il DESC " +
+                "LIMIT 50"
+            );
+            ps.setInt(1, idUtenteLoggato); // Per capire se l'utente ha già messo like
+            ps.setInt(2, idUtenteLoggato); // Per capire se l'utente ha già salvato
+
+        } else {
+            // Query con filtro di ricerca nel titolo o descrizione
+            ps = conn.prepareStatement(
+                "SELECT r.id_ricetta, r.titolo, r.descrizione, r.immagine_url, " +
+                "       r.categoria, r.tempo_preparazione_min, r.tempo_cottura_min, " +
+                "       r.difficolta, r.porzioni, " +
+                "       u.id_utente AS id_autore, u.nome_visualizzato AS nome_autore, " +
+                "       u.username AS username_autore, u.avatar_url AS avatar_autore, " +
+                "       COUNT(DISTINCT mp.id_like) AS num_like, " +
+                "       SUM(CASE WHEN mp.id_utente = ? THEN 1 ELSE 0 END) AS liked, " +
+                "       SUM(CASE WHEN rs.id_utente  = ? THEN 1 ELSE 0 END) AS salvata " +
+                "FROM Ricetta r " +
+                "JOIN Utente u ON r.id_utente = u.id_utente " +
+                "LEFT JOIN MiPiace mp ON r.id_ricetta = mp.id_ricetta " +
+                "LEFT JOIN RicettaSalvata rs ON r.id_ricetta = rs.id_ricetta " +
+                "WHERE r.pubblicata = TRUE " +
+                "AND (r.titolo LIKE ? OR r.descrizione LIKE ?) " +
+                "GROUP BY r.id_ricetta, u.id_utente " +
+                "ORDER BY r.creato_il DESC " +
+                "LIMIT 50"
+            );
+            ps.setInt(1, idUtenteLoggato);
+            ps.setInt(2, idUtenteLoggato);
+            String pattern = "%" + cerca + "%";
+            ps.setString(3, pattern);
+            ps.setString(4, pattern);
+        }
+
+        ResultSet rs = ps.executeQuery();
+        int i = 0; // Indice per riempire l'array
+
+        while (rs.next() && i < ricette.length) {
+            // Per ogni riga del risultato, crea un oggetto RicettaCard
+            RicettaCard card = new RicettaCard();
+
+            card.setIdRicetta(rs.getInt("id_ricetta"));
+            card.setTitolo(rs.getString("titolo"));
+            card.setDescrizione(rs.getString("descrizione"));
+            // Risolve l'URL dell'immagine (aggiunge contextPath se necessario)
+            card.setImmagineUrl(UrlUtils.risolvi(ctx, rs.getString("immagine_url")));
+            card.setCategoria(rs.getString("categoria"));
+            card.setTempoPrep(rs.getInt("tempo_preparazione_min"));
+            card.setTempoCottura(rs.getInt("tempo_cottura_min"));
+            card.setDifficolta(rs.getString("difficolta"));
+            card.setPorzioni(rs.getInt("porzioni"));
+
+            // Dati dell'autore
+            card.setIdAutore(rs.getInt("id_autore"));
+            card.setNomeAutore(rs.getString("nome_autore"));
+            card.setUsernameAutore(rs.getString("username_autore"));
+            card.setAvatarAutore(UrlUtils.risolvi(ctx, rs.getString("avatar_autore")));
+
+            // Dati sociali
+            card.setNumLike(rs.getInt("num_like"));
+            card.setLikedDaMe(rs.getInt("liked") > 0);    // > 0 = l'utente ha messo like
+            card.setSalvataDaMe(rs.getInt("salvata") > 0); // > 0 = l'utente ha salvato
+
+            ricette[i] = card; // Salva la card nell'array
+            i++;               // Passa alla posizione successiva
+        }
+
+        rs.close();
+        ps.close();
+
+    } catch (Exception e) {
+        // Se c'è un errore, rimane l'array vuoto
+    } finally {
+        if (conn != null) {
+            try { conn.close(); } catch (Exception ignore) {}
         }
     }
-    
-    String dbUrl = "jdbc:mysql://localhost:3306/bakingbread?useSSL=false";
-    String searchQuery = request.getParameter("q");
 %>
 <!DOCTYPE html>
 <html lang="it">
@@ -67,203 +271,156 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home - BakingBread</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/global.css">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home.css">
-    <link rel="icon" href="${pageContext.request.contextPath}/media/favicon.svg">
+    <link rel="stylesheet" href="<%= ctx %>/css/global.css">
+    <link rel="stylesheet" href="<%= ctx %>/css/home.css">
+    <link rel="icon" href="<%= ctx %>/media/favicon.svg">
 </head>
 <body>
+
+    <%-- Includi la barra di navigazione --%>
     <jsp:include page="navbar.jsp" />
-    
-    <main class="feed-container animate-entrance">
+
+    <main>
         <div class="feed-container">
-            <% 
-                try {
-                    Class.forName("com.mysql.cj.jdbc.Driver");
-                    Connection conn = DriverManager.getConnection(dbUrl, "root", "");
-                    
-                    StringBuilder sql = new StringBuilder(
-                        "SELECT r.id_ricetta, r.titolo, r.descrizione, r.categoria, " +
-                        "r.tempo_preparazione_min, r.immagine_url, r.creato_il, " +
-                        "u.id_utente, u.username, u.nome_visualizzato, u.avatar_url, " +
-                        "(SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta) AS num_like, " +
-                        "(SELECT COUNT(*) FROM Commento WHERE id_ricetta = r.id_ricetta) AS num_commenti ");
-                    
-                    if (idUtenteLoggato != null) {
-                        sql.append(", (SELECT COUNT(*) FROM MiPiace WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_like");
-                        sql.append(", (SELECT COUNT(*) FROM RicettaSalvata WHERE id_ricetta = r.id_ricetta AND id_utente = ").append(idUtenteLoggato).append(") AS gia_salvata");
-                    }
-                    
-                    sql.append(" FROM Ricetta r ");
-                    sql.append("JOIN Utente u ON r.id_utente = u.id_utente ");
-                    sql.append("WHERE r.pubblicata = TRUE ");
-                    
-                    if (searchQuery != null && !searchQuery.trim().isEmpty()) {
-                        sql.append("AND (r.titolo LIKE ? OR r.descrizione LIKE ?) ");
-                    }
-                    
-                    sql.append("ORDER BY r.creato_il DESC LIMIT 50");
-                    
-                    PreparedStatement ps = conn.prepareStatement(sql.toString());
-                    
-                    if (searchQuery != null && !searchQuery.trim().isEmpty()) {
-                        String q = "%" + searchQuery.trim() + "%";
-                        ps.setString(1, q);
-                        ps.setString(2, q);
-                    }
-                    
-                    ResultSet rs = ps.executeQuery();
-                    
-                    int count = 0;
-                    while (rs.next()) {
-                        count++;
-                        int idRicetta = rs.getInt("id_ricetta");
-                        String titolo = rs.getString("titolo");
-                        String descrizione = rs.getString("descrizione");
-                        String categoria = rs.getString("categoria");
-                        int tempo = rs.getInt("tempo_preparazione_min");
-String immagineUrl = UrlUtils.resolve(ctx, rs.getString("immagine_url"));
-                         Timestamp creatoTs = rs.getTimestamp("creato_il");
-                         java.util.Date creato = creatoTs != null ? new java.util.Date(creatoTs.getTime()) : null;
-                         int idAutore = rs.getInt("id_utente");
-                         String username = rs.getString("username");
-                         String nomeVisualizzato = rs.getString("nome_visualizzato");
-                         String avatarUrl = UrlUtils.resolve(ctx, rs.getString("avatar_url"));
-                         int numLike = rs.getInt("num_like");
-                         int numCommenti = rs.getInt("num_commenti");
-                         
-                         boolean giaLike = false;
-                         boolean giaSalvata = false;
-                         if (idUtenteLoggato != null) {
-                             giaLike = rs.getInt("gia_like") > 0;
-                             giaSalvata = rs.getInt("gia_salvata") > 0;
-                         }
-                         
-                         String displayImmagine = "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)";
-                         if (immagineUrl != null && !immagineUrl.isEmpty()) {
-                             displayImmagine = "url('" + immagineUrl + "')";
-                         }
-            %>
-            <article class="recipe-card animate-entrance">
-                <div class="recipe-card-header">
-                    <a href="profile.jsp?id=<%= idAutore %>" class="recipe-card-avatar">
-                        <% if (avatarUrl != null && !avatarUrl.isEmpty()) { %>
-                            <img src="<%= avatarUrl %>" alt="<%= nomeVisualizzato %>">
+
+            <%-- Intestazione della sezione --%>
+            <div class="section-head">
+                <div>
+                    <p class="eyebrow">Feed</p>
+                    <h1>
+                        <% if (!cerca.isEmpty()) { %>
+                            Risultati per "<%= cerca %>"
                         <% } else { %>
-                            <%= nomeVisualizzato.substring(0,1).toUpperCase() %>
+                            Ultime ricette
                         <% } %>
-                    </a>
-                    <div class="recipe-card-author">
-                        <a href="profile.jsp?id=<%= idAutore %>"><%= nomeVisualizzato %></a>
-                        <small><%= username %></small>
-                    </div>
-                    <% if (categoria != null) { %>
-                        <span class="badge badge-secondary"><%= categoria %></span>
-                    <% } %>
+                    </h1>
                 </div>
-                
-                <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>">
-                    <div class="recipe-card-image" style="background:<%= displayImmagine %>;background-size:cover;background-position:center;"></div>
-                </a>
-                
-                <div class="recipe-card-body">
-                    <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>" class="recipe-card-title"><%= titolo %></a>
-                    <% if (tempo > 0) { %>
-                        <div class="recipe-card-meta">
-                            <span>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                                </svg>
-                                <%= tempo %> min
-                            </span>
-                        </div>
-                    <% } %>
-                    <p class="recipe-card-desc"><%= descrizione != null && descrizione.length() > 120 ? descrizione.substring(0, 120) + "..." : (descrizione != null ? descrizione : "") %></p>
-                </div>
-                
-                <div class="recipe-card-footer">
-                    <% 
-                        String likeAction = giaLike ? "rimuovi" : "aggiungi";
-                    %>
-                    <% if (idUtenteLoggato != null) { %>
-                        <form method="POST" action="home.jsp" style="display:inline;">
-                            <input type="hidden" name="azione" value="mi piace">
-                            <input type="hidden" name="tipo" value="<%= likeAction %>">
-                            <input type="hidden" name="id" value="<%= idRicetta %>">
-                            <button type="submit" class="action-btn <%= giaLike ? "active" : "" %>">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="<%= giaLike ? "currentColor" : "none" %>" stroke="currentColor" stroke-width="2">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                                </svg>
-                                <%= numLike %>
-                            </button>
-                        </form>
-                        <form method="POST" action="home.jsp" style="display:inline;">
-                            <input type="hidden" name="azione" value="salva">
-                            <input type="hidden" name="tipo" value="<%= giaSalvata ? "rimuovi" : "aggiungi" %>">
-                            <input type="hidden" name="id" value="<%= idRicetta %>">
-                            <button type="submit" class="action-btn <%= giaSalvata ? "active" : "" %>">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="<%= giaSalvata ? "currentColor" : "none" %>" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                                </svg>
-                            </button>
-                        </form>
+            </div>
+
+            <%-- Ciclo che mostra tutte le ricette nell'array --%>
+            <% if (ricette.length == 0) { %>
+                <%-- Stato vuoto: nessuna ricetta trovata --%>
+                <div class="recipe-empty animate-entrance">
+                    <p style="font-size:48px; margin:0;">🍞</p>
+                    <h2>Nessuna ricetta trovata</h2>
+                    <% if (!cerca.isEmpty()) { %>
+                        <p class="text-muted">Nessun risultato per "<%= cerca %>"</p>
+                        <a href="home.jsp" class="btn-secondary mt-3">Vedi tutte le ricette</a>
                     <% } else { %>
-                        <a href="login.jsp" class="action-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                            </svg>
-                            <%= numLike %>
-                        </a>
-                    <% } %>
-                    <a href="dettaglio_ricetta.jsp?id=<%= idRicetta %>" class="action-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        <%= numCommenti %>
-                    </a>
-                    <% if (idUtenteLoggato != null && idAutore == idUtenteLoggato) { %>
-                        <a href="crea_ricetta.jsp?modifica=<%= idRicetta %>" class="action-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                        </a>
+                        <p class="text-muted">Sii il primo a pubblicare una ricetta!</p>
+                        <a href="crea_ricetta.jsp" class="btn-primary mt-3">Crea una ricetta</a>
                     <% } %>
                 </div>
-            </article>
-            <% 
-                    }
-                    rs.close();
-                    ps.close();
-                    conn.close();
-                    
-                    if (count == 0) {
-            %>
-            <div class="empty-state">
-                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 6.253v13m-9-13v13m9-13v13m9-13v13"/>
-                    <path d="M5.5 9.5h3m-3 4h3m9-4h3m-3-4h3m-3-4h3"/>
-                </svg>
-                <h3>Nessuna ricetta trovata</h3>
-                <p>Inizia a seguire altri utenti o crea la tua prima ricetta!</p>
-                <% if (idUtenteLoggato != null) { %>
-                    <a href="crea_ricetta.jsp" class="btn-primary mt-3" style="display:inline-block;width:auto;">Crea Ricetta</a>
-                <% } else { %>
-                    <a href="register.jsp" class="btn-primary mt-3" style="display:inline-block;width:auto;">Registrati</a>
-                <% } %>
-            </div>
-            <% 
-                    }
-                } catch (Exception e) {
-            %>
-            <div class="alert alert-error">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                Errore nel caricamento delle ricette: <%= e.getMessage() %>
-            </div>
-            <% } %>
+
+            <% } else { %>
+                <%-- Ciclo sull'array: mostra ogni ricetta come card --%>
+                <% for (int i = 0; i < ricette.length; i++) { %>
+                    <%-- Variabile locale per leggere più facilmente la ricetta corrente --%>
+                    <% RicettaCard r = ricette[i]; %>
+
+                    <article class="recipe-card animate-entrance">
+
+                        <%-- Intestazione card: avatar e nome autore --%>
+                        <div class="recipe-card-header">
+                            <a href="<%= ctx %>/profile.jsp?id=<%= r.getIdAutore() %>"
+                               class="recipe-card-avatar">
+                                <% if (r.getAvatarAutore() != null && !r.getAvatarAutore().isEmpty()) { %>
+                                    <img src="<%= r.getAvatarAutore() %>" alt="Avatar">
+                                <% } else { %>
+                                    <%= r.getNomeAutore() != null && !r.getNomeAutore().isEmpty()
+                                        ? r.getNomeAutore().substring(0, 1).toUpperCase() : "U" %>
+                                <% } %>
+                            </a>
+                            <div class="recipe-card-author">
+                                <a href="<%= ctx %>/profile.jsp?id=<%= r.getIdAutore() %>">
+                                    <%= r.getNomeAutore() %>
+                                </a>
+                                <small>@<%= r.getUsernameAutore() %></small>
+                            </div>
+                            <% if (r.getCategoria() != null && !r.getCategoria().isEmpty()) { %>
+                                <span class="badge badge-secondary"><%= r.getCategoria() %></span>
+                            <% } %>
+                        </div>
+
+                        <%-- Immagine della ricetta (se presente) --%>
+                        <% if (r.getImmagineUrl() != null && !r.getImmagineUrl().isEmpty()) { %>
+                            <a href="<%= ctx %>/dettaglio_ricetta.jsp?id=<%= r.getIdRicetta() %>"
+                               class="recipe-card-image">
+                                <img src="<%= r.getImmagineUrl() %>"
+                                     alt="<%= r.getTitolo() %>"
+                                     style="width:100%; height:100%; object-fit:cover;">
+                            </a>
+                        <% } %>
+
+                        <%-- Corpo della card: titolo, descrizione, meta-info --%>
+                        <div class="recipe-card-body">
+                            <a href="<%= ctx %>/dettaglio_ricetta.jsp?id=<%= r.getIdRicetta() %>"
+                               class="recipe-card-title">
+                                <%= r.getTitolo() %>
+                            </a>
+                            <% if (r.getDescrizione() != null && !r.getDescrizione().isEmpty()) { %>
+                                <p class="recipe-card-desc"><%= r.getDescrizione() %></p>
+                            <% } %>
+
+                            <%-- Informazioni rapide: tempo, difficoltà, porzioni --%>
+                            <div class="recipe-card-meta">
+                                <% if (r.getTempoPrep() > 0 || r.getTempoCottura() > 0) { %>
+                                    <span>⏱ <%= r.getTempoPrep() + r.getTempoCottura() %> min</span>
+                                <% } %>
+                                <% if (r.getDifficolta() != null && !r.getDifficolta().isEmpty()) { %>
+                                    <span>📊 <%= r.getDifficolta() %></span>
+                                <% } %>
+                                <% if (r.getPorzioni() > 0) { %>
+                                    <span>🍽 <%= r.getPorzioni() %> porzioni</span>
+                                <% } %>
+                            </div>
+                        </div>
+
+                        <%-- Footer della card: pulsanti like, salva, commenta --%>
+                        <div class="recipe-card-footer">
+
+                            <%-- Pulsante Mi Piace --%>
+                            <% if (r.isLikedDaMe()) { %>
+                                <%-- L'utente ha già messo like: cliccando lo rimuove --%>
+                                <a href="home.jsp?azione=mi piace&tipo=rimuovi&id=<%= r.getIdRicetta() %><%= !cerca.isEmpty() ? "&cerca=" + java.net.URLEncoder.encode(cerca, "UTF-8") : "" %>"
+                                   class="action-btn active">
+                                    ❤ <%= r.getNumLike() %> Mi piace
+                                </a>
+                            <% } else { %>
+                                <%-- L'utente non ha ancora messo like --%>
+                                <a href="home.jsp?azione=mi piace&tipo=aggiungi&id=<%= r.getIdRicetta() %><%= !cerca.isEmpty() ? "&cerca=" + java.net.URLEncoder.encode(cerca, "UTF-8") : "" %>"
+                                   class="action-btn">
+                                    🤍 <%= r.getNumLike() %> Mi piace
+                                </a>
+                            <% } %>
+
+                            <%-- Pulsante Salva --%>
+                            <% if (r.isSalvataDaMe()) { %>
+                                <a href="home.jsp?azione=salva&tipo=rimuovi&id=<%= r.getIdRicetta() %><%= !cerca.isEmpty() ? "&cerca=" + java.net.URLEncoder.encode(cerca, "UTF-8") : "" %>"
+                                   class="action-btn active">
+                                    🔖 Salvata
+                                </a>
+                            <% } else { %>
+                                <a href="home.jsp?azione=salva&tipo=aggiungi&id=<%= r.getIdRicetta() %><%= !cerca.isEmpty() ? "&cerca=" + java.net.URLEncoder.encode(cerca, "UTF-8") : "" %>"
+                                   class="action-btn">
+                                    📌 Salva
+                                </a>
+                            <% } %>
+
+                            <%-- Pulsante Commenta --%>
+                            <a href="<%= ctx %>/dettaglio_ricetta.jsp?id=<%= r.getIdRicetta() %>#commenti"
+                               class="action-btn">
+                                💬 Commenta
+                            </a>
+                        </div>
+
+                    </article>
+                <% } %> <%-- fine for --%>
+            <% } %> <%-- fine if ricette.length --%>
+
         </div>
     </main>
-    
-    <script src="${pageContext.request.contextPath}/js/main.js"></script>
+
+    <script src="<%= ctx %>/js/home.js"></script>
 </body>
 </html>
